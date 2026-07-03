@@ -60,16 +60,21 @@ function twoPhasePostingLengths<T>(
   return lengths
 }
 
+function effectiveFirstBranchLength(
+  branchPostingLengths: readonly number[],
+  allowedDocs: DocIdGate | undefined,
+): number {
+  const firstLength = branchPostingLengths[0]
+  return allowedDocs == null ? firstLength : Math.min(firstLength, allowedDocs.size)
+}
+
 function shouldUseTwoPhaseAnd(
   branchPostingLengths: readonly number[],
   allowedDocs: DocIdGate | undefined,
 ): boolean {
   if (branchPostingLengths.length <= 1) return false
 
-  const firstLength = branchPostingLengths[0]
-  const effectiveFirstLength = allowedDocs == null
-    ? firstLength
-    : Math.min(firstLength, allowedDocs.size)
+  const effectiveFirstLength = effectiveFirstBranchLength(branchPostingLengths, allowedDocs)
   if (effectiveFirstLength < DEFAULT_POSTING_GATE_MIN_LENGTH) return false
 
   const targetLength = effectiveFirstLength >>> DEFAULT_POSTING_GATE_RATIO_SHIFT
@@ -87,10 +92,7 @@ function shouldUseTwoPhaseAndNot(
 ): boolean {
   if (branchPostingLengths.length <= 1) return false
 
-  const firstLength = branchPostingLengths[0]
-  const effectiveFirstLength = allowedDocs == null
-    ? firstLength
-    : Math.min(firstLength, allowedDocs.size)
+  const effectiveFirstLength = effectiveFirstBranchLength(branchPostingLengths, allowedDocs)
   const largeThreshold = Math.max(
     DEFAULT_POSTING_GATE_MIN_LENGTH,
     Math.floor(documentCount * BROAD_EXCLUSION_TWO_PHASE_MIN_FRACTION),
