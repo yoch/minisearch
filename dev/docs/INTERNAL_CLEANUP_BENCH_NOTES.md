@@ -285,4 +285,15 @@ Overhead validation `assembleUntrusted − assembleTrusted` : **~1.4–2.7 ms** 
 
 **VERIFIED** — gain reproductible ≥14 % sur les trois scénarios majeurs, confirmé en double capture paired, gain visible dans `accumulateIndex`, parité et layouts stables.
 
+### Pistes post-commit (`2d7204f`)
+
+| Piste | Résultat |
+|-------|----------|
+| `DEFAULT_CAPACITY=128` (sans pré-scan) | **NOT VERIFIED** — dense +4.1 %, giant/docId ~−2 % |
+| Shell `parseIntegerKeyFast` | **NOT VERIFIED** — neutre (−0.4 % à +0.7 %) |
+| Trusted assemble (famille 4) | **NOT VERIFIED** — ~2 ms seulement |
+| Chunked growables | **Non poursuivi** — copies élevées mais pré-scan toujours exclu |
+
+**Conclusion** : session close ; le levier principal était le parse index relaxé. Worktree contrôle `.worktrees/freeze-control` pointé sur `2d7204f` pour futures expériences.
+
 ---
