@@ -11,81 +11,13 @@ import {
   type FieldIdArray,
   type FrozenPostingsLayout,
 } from './frozenPostings'
+import { recordIncrementalGrow } from './internal/incrementalGrowProfiler'
 
 const DEFAULT_CAPACITY = 16
 const GROWTH_FACTOR = 2
 
-/** @internal Growable column sizing policy (production uses {@link GROWTH_FACTOR}). */
-export function nextGrowableCapacity(currentLength: number, growthFactor = GROWTH_FACTOR): number {
-  if (!Number.isFinite(growthFactor) || growthFactor <= 1) {
-    throw new Error(`growable capacity growthFactor must be > 1, got ${growthFactor}`)
-  }
-  return Math.max(1, Math.ceil(currentLength * growthFactor))
-}
-
-export type SimulatedColumnGrowth = {
-  growEvents: number
-  bytesCopied: number
-  peakCapacity: number
-  finalCapacity: number
-  overshoot: number
-}
-
-/**
- * @internal Simulate repeated push growth for one column (e.g. compare ×2 vs ×1.5).
- * `elementBytes` is the width of one slot (4 for u32 slotIds, 2 for u16 docIds, etc.).
- */
-export function simulateColumnGrowth(
-  itemCount: number,
-  elementBytes: number,
-  initialCapacity = DEFAULT_CAPACITY,
-  growthFactor = GROWTH_FACTOR,
-): SimulatedColumnGrowth {
-  let capacity = Math.max(1, initialCapacity)
-  let length = 0
-  let growEvents = 0
-  let bytesCopied = 0
-  let peakCapacity = capacity
-
-  while (length < itemCount) {
-    if (length >= capacity) {
-      bytesCopied += capacity * elementBytes
-      growEvents++
-      capacity = nextGrowableCapacity(capacity, growthFactor)
-      if (capacity > peakCapacity) peakCapacity = capacity
-    }
-    length++
-  }
-
-  return {
-    growEvents,
-    bytesCopied,
-    peakCapacity,
-    finalCapacity: capacity,
-    overshoot: capacity - itemCount,
-  }
-}
-
-type GrowStats = {
-  growEvents: number
-  bytesCopied: number
-}
-
-let lastGrowStats: GrowStats = { growEvents: 0, bytesCopied: 0 }
-
-/** @internal Freeze benchmark profiler. */
-export function resetIncrementalGrowStats(): void {
-  lastGrowStats = { growEvents: 0, bytesCopied: 0 }
-}
-
-/** @internal Freeze benchmark profiler. */
-export function readIncrementalGrowStats(): GrowStats {
-  return { ...lastGrowStats }
-}
-
-function recordGrow(bytesCopied: number): void {
-  lastGrowStats.growEvents++
-  lastGrowStats.bytesCopied += bytesCopied
+function growableCapacity(currentLength: number): number {
+  return Math.max(1, Math.ceil(currentLength * GROWTH_FACTOR))
 }
 
 type GrowableDocIdArray = Uint16Array | Uint32Array
@@ -122,8 +54,8 @@ class GrowableUint32Column {
 
   push(value: number): void {
     if (this._len >= this._buf.length) {
-      const grown = new Uint32Array(nextGrowableCapacity(this._buf.length))
-      recordGrow(this._buf.byteLength)
+      const grown = new Uint32Array(growableCapacity(this._buf.length))
+      recordIncrementalGrow(this._buf.byteLength)
       grown.set(this._buf)
       this._buf = grown
     }
@@ -164,14 +96,14 @@ class GrowableDocIdColumn {
     const grown = this._buf instanceof Uint16Array
       ? new Uint16Array(minCapacity)
       : new Uint32Array(minCapacity)
-    recordGrow(this._buf.byteLength)
+    recordIncrementalGrow(this._buf.byteLength)
     grown.set(this._buf)
     this._buf = grown
   }
 
   private promote(): void {
     if (this._buf instanceof Uint32Array) return
-    recordGrow(this._buf.byteLength)
+    recordIncrementalGrow(this._buf.byteLength)
     const promoted = new Uint32Array(this._buf.length)
     promoted.set(this._buf)
     this._buf = promoted
@@ -180,7 +112,7 @@ class GrowableDocIdColumn {
   push(value: number): void {
     if (value > 0xffff) this.promote()
     if (this._len >= this._buf.length) {
-      this.grow(nextGrowableCapacity(this._buf.length))
+      this.grow(growableCapacity(this._buf.length))
     }
     this._buf[this._len++] = value
   }
@@ -219,14 +151,14 @@ class GrowableFreqColumn {
     const grown = this._buf instanceof Uint8Array
       ? new Uint8Array(minCapacity)
       : new Uint16Array(minCapacity)
-    recordGrow(this._buf.byteLength)
+    recordIncrementalGrow(this._buf.byteLength)
     grown.set(this._buf)
     this._buf = grown
   }
 
   private promote(): void {
     if (this._buf instanceof Uint16Array) return
-    recordGrow(this._buf.byteLength)
+    recordIncrementalGrow(this._buf.byteLength)
     const promoted = new Uint16Array(this._buf.length)
     promoted.set(this._buf)
     this._buf = promoted
@@ -236,7 +168,7 @@ class GrowableFreqColumn {
     const v = clampFreq(freq)
     if (v > 0xff) this.promote()
     if (this._len >= this._buf.length) {
-      this.grow(nextGrowableCapacity(this._buf.length))
+      this.grow(growableCapacity(this._buf.length))
     }
     this._buf[this._len++] = v
     return v

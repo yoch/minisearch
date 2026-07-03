@@ -12,8 +12,8 @@ import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../../dist/es/index.js'
 import {
   buildFrozenAssembleParamsFromMiniSearchSnapshot,
-  parseSnapshotIndex,
 } from '../../src/fromMiniSearch.ts'
+import { parseSnapshotIndex } from '../harness/freezeImportProfiler.ts'
 import {
   frozenAssembleWithCtor,
   frozenFromMiniSearchSnapshot,

@@ -11,7 +11,7 @@
  */
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../../dist/es/index.js'
-import { parseSnapshotIndex } from '../../src/fromMiniSearch.ts'
+import { parseSnapshotIndex } from '../harness/freezeImportProfiler.ts'
 import { frozenFromMiniSearchSnapshot } from '../harness/frozenSourceInternals.ts'
 import { getScenarioById } from '../scenarioRegistry.mjs'
 import { measureHeap, gc, medianOf } from '../benchmarkUtils.js'

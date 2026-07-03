@@ -18,6 +18,7 @@ const forbiddenPatterns = [
   { name: 'SearchableMap runtime', pattern: /\bclass SearchableMap\b|\bnew SearchableMap\b|SearchableMap\/TreeIterator|SearchableMap\/fuzzySearch/ },
   { name: 'legacy Map-radix packer', pattern: /\bfromRadixTree\b|\bdeserializeRadixTreeShape\b|\bdeserializeTermIndexTree\b/ },
   { name: 'benchmark harness paths', pattern: /benchmarks\/|testSupport\/|dev\/parity/ },
+  { name: 'incremental grow profiler hooks', pattern: /\breadIncrementalGrowStats\b|\bresetIncrementalGrowStats\b|\bsimulateColumnGrowth\b/ },
   { name: 'legacy encode shared fallback module', pattern: /\bbinaryMsv5EncodeShared\b/ },
   { name: 'deprecated PackedRadix string wrappers', pattern: /\bprefixEntries\b|\bfuzzyEntries\b|\bpackedRadixFuzzyEntries\b|\bpackedPrefixEntries\b|\bdevStringIterators\b/ },
 ]

@@ -6,6 +6,7 @@ const { existsSync, readFileSync } = require('node:fs')
 const allowedFiles = new Set([
   'src/internal/frozenInternals.ts',
   'benchmarks/harness/frozenSourceInternals.ts',
+  'benchmarks/harness/freezeImportProfiler.ts',
   'benchmarks/harness/frozenDistInternals.mjs',
   'testSupport/frozenMemoryBreakdown.js',
 ])
@@ -118,6 +119,10 @@ pushImportViolations(benchmarkFiles, [
   {
     label: 'benchmark direct import of src/internal frozenInternals',
     pattern: new RegExp(`${importPrefix}['"][^'"]*src/internal/frozenInternals(?:\\.[jt]s)?['"]`, 'g'),
+  },
+  {
+    label: 'benchmark grow profiler import outside freezeImportProfiler harness',
+    pattern: new RegExp(`${importPrefix}['"][^'"]*src/incrementalPostings(?:\\.[jt]s)?['"]`, 'g'),
   },
 ])
 

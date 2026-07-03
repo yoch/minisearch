@@ -7,7 +7,8 @@ import { frozenMemoryBreakdown } from '../testSupport/frozenMemoryBreakdown.js'
 import { frozenFromMiniSearch } from '../testSupport/frozenImportHelpers'
 import { createFrozenIndexBuilder } from './frozenBuild'
 import { MAX_FREQ, readDocId } from './compactPostings'
-import { IncrementalPostingsAccumulator, nextGrowableCapacity, simulateColumnGrowth } from './incrementalPostings'
+import { IncrementalPostingsAccumulator } from './incrementalPostings'
+import { nextGrowableCapacity, simulateColumnGrowth } from '../testSupport/growableColumnGrowth.js'
 import {
   createFrozenFieldTermFlyweight,
   validateFrozenPostingsLayout,
@@ -339,7 +340,7 @@ describe('IncrementalPostingsAccumulator', () => {
       const sweep = [16, 32, 64, 128]
 
       for (const postingCount of [200_000, 300_000]) {
-        const stats = sweep.map((initialCapacity) =>
+        const stats = sweep.map(initialCapacity =>
           simulateColumnGrowth(postingCount, elementBytes, initialCapacity),
         )
 
@@ -358,7 +359,7 @@ describe('IncrementalPostingsAccumulator', () => {
         expect(baseline.bytesCopied - largest.bytesCopied).toBeLessThan(baseline.bytesCopied * 0.001)
       }
 
-      const smallIndex = sweep.map((initialCapacity) =>
+      const smallIndex = sweep.map(initialCapacity =>
         simulateColumnGrowth(100, elementBytes, initialCapacity),
       )
       // Small snapshots pay upfront for a larger hint: same final size, more reserved from the first push.

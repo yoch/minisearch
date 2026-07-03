@@ -4,11 +4,11 @@
  *   NODE_OPTIONS='--expose-gc' pnpm exec tsx benchmarks/scripts/profile-accumulator-growth.mjs
  */
 import MiniSearch from 'minisearch'
-import { accumulateSnapshotIndex } from '../../src/fromMiniSearch.ts'
 import {
+  accumulateSnapshotIndex,
   readIncrementalGrowStats,
   resetIncrementalGrowStats,
-} from '../../src/incrementalPostings.ts'
+} from '../harness/freezeImportProfiler.ts'
 import { getScenarioById } from '../scenarioRegistry.mjs'
 import { argValue } from './cpuBenchUtils.mjs'
 

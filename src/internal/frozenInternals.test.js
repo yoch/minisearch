@@ -1,6 +1,7 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../FrozenMiniSearch'
-import { buildFrozenAssembleParamsFromMiniSearchSnapshot, parseSnapshotIndex } from '../fromMiniSearch'
+import { buildFrozenAssembleParamsFromMiniSearchSnapshot } from '../fromMiniSearch'
+import { parseSnapshotIndex } from '../freezeSnapshotIndex'
 import { defaultAutoSuggestOptions } from '../searchDefaults'
 import {
   frozenAssembleWithCtor,
