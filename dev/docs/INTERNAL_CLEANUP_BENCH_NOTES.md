@@ -113,7 +113,29 @@ loadBinarySync 5-run median 29.2 ms
 2. **Double capture** : 2× `benchmark-record` consécutifs ; ne flaguer que si les deux dégradent.
 3. **Micro-harness par surface** : `regression-investigation.mjs` (search), timed `loadBinarySync` 5-run (load), `profile-freeze.mjs` (freeze).
 4. **Assouplir policy** sous floor 10 ms : privilégier delta absolu ms (déjà partiellement en place) ou exiger `absDelta > 5 ms` **et** `%` pour FAIL.
-5. **Re-baseline** : promouvoir `latest-step5.json` → `reference.json` quand 1.7.0 est validé (écart d379e6f non actionnable).
+5. **Re-baseline** : ~~promouvoir `latest-step5.json` → `reference.json` quand 1.7.0 est validé~~ **fait** — voir section ci-dessous.
+
+---
+
+## Re-baseline référence — `ed37568` (2026-07-03)
+
+**Workflow** : `make bench-reference-update` (RUNS=3, profil `vs-reference`, 13 scénarios + heap v4).
+
+| Champ | Ancienne ref (`d379e6f`) | Nouvelle ref (`ed37568`) |
+|-------|--------------------------|--------------------------|
+| `capturedAt` | 2026-07-02 | 2026-07-03 |
+| `packageVersion` | 1.6.4 | 1.7.0 |
+| `recordKind` | reference | reference-forced-dirty (arbre sale pendant capture) |
+| docId65535 search p50 exact | ~41–53 ms (suite instable) | **32.96 ms** |
+| docId65535 loadBinary | ~32–46 ms (swings) | **44.84 ms** |
+
+**Validation post-promotion** :
+- `make bench-diff` : **PASS** (0 % delta, latest ≡ reference)
+- `regression-investigation docIdBoundary` : frozen p50 **26.2 ms**, parité OK
+
+**Archives locales** : `benchmarks/baselines/latest-post-rebaseline.json` (copie de `latest.json`).
+
+**Note** : l’écart historique vs `d379e6f` n’est plus actionnable ; les diffs futurs partent de cette référence.
 
 ---
 
@@ -125,6 +147,8 @@ ecd9ac0 Short-circuit empty gates in AND_NOT collection and execution.
 337322e Route executeQuery through executeQueryWithRunOptions entry point.
 78d2c22 Share assembleFrozenInternal between product and test harness.
 e7c8701 Sort activeShortIds during snapshot validation and reuse for dense remap.
+9fcf9de Document per-step bench notes for internals cleanup lot.
+ed37568 Add frozen postings doc id collection tests.
 ```
 
 Captures archivées localement : `benchmarks/baselines/latest-step0.json` … `latest-step5.json` (gitignored).
