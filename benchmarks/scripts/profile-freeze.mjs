@@ -16,16 +16,7 @@ import { packTermsFromList } from '../../src/PackedRadixTree/packTermList.ts'
 import { validateFrozenTermIndexLeaves } from '../../src/frozenTermIndex.ts'
 import SearchableMap, { packSearchableMap } from '../../testSupport/upstreamSearchableMap.js'
 import { getScenarioById } from '../scenarioRegistry.mjs'
-import { intArg, timed } from './cpuBenchUtils.mjs'
-
-function argValue(name) {
-  for (let i = 0; i < process.argv.length; i++) {
-    const arg = process.argv[i]
-    if (arg === `--${name}`) return process.argv[i + 1]
-    if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3)
-  }
-  return undefined
-}
+import { argValue, intArg, timed } from './cpuBenchUtils.mjs'
 
 const SCENARIOS = {
   overflow: 'extreme-overflowFrequency',
@@ -35,7 +26,7 @@ const SCENARIOS = {
   giant: 'extreme-giantVocabulary',
 }
 
-const scenarioKey = argValue('scenario') ?? 'overflow'
+const scenarioKey = argValue('--scenario') ?? 'overflow'
 const warmup = intArg('warmup', 3, { min: 0 })
 const iterations = intArg('iterations', 25)
 

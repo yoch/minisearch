@@ -21,29 +21,7 @@ import {
   frozenPostings,
   frozenTermIndex,
 } from '../harness/frozenSourceInternals.ts'
-
-function argValue(name) {
-  for (let i = 0; i < process.argv.length; i++) {
-    const arg = process.argv[i]
-    if (arg === `--${name}`) return process.argv[i + 1]
-    if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3)
-  }
-  return undefined
-}
-
-function intArg(name, fallback) {
-  const raw = argValue(name)
-  const value = raw == null ? NaN : Number(raw)
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
-}
-
-function median(nums) {
-  const sorted = [...nums].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid]
-}
+import { intArg, median } from './cpuBenchUtils.mjs'
 
 function timeFn(fn, warmup, iterations) {
   for (let i = 0; i < warmup; i++) fn()

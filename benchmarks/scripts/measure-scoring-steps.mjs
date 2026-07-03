@@ -28,35 +28,7 @@ import {
   frozenTermIndex,
 } from '../harness/frozenSourceInternals.ts'
 import { executeRaw } from '../harness/frozenSourceInternals.ts'
-
-function argValue(name) {
-  for (let i = 0; i < process.argv.length; i++) {
-    const arg = process.argv[i]
-    if (arg === `--${name}`) return process.argv[i + 1]
-    if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3)
-  }
-  return undefined
-}
-
-function intArg(name, fallback) {
-  const raw = argValue(name)
-  const value = raw == null ? NaN : Number(raw)
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
-}
-
-function median(nums) {
-  const sorted = [...nums].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid]
-}
-
-function p95(nums) {
-  const sorted = [...nums].sort((a, b) => a - b)
-  const idx = Math.ceil(sorted.length * 0.95) - 1
-  return sorted[Math.max(0, idx)]
-}
+import { argValue, intArg, median, p95 } from './cpuBenchUtils.mjs'
 
 function buildFrozen(corpus, options) {
   return FrozenMiniSearch.fromDocuments(corpus, options)
@@ -257,7 +229,7 @@ const CASES = [
   },
 ]
 
-const step = argValue('step') ?? 'baseline'
+const step = argValue('--step') ?? 'baseline'
 const runs = intArg('runs', 5)
 const warmup = intArg('warmup', 3)
 const iterations = intArg('iterations', 15)

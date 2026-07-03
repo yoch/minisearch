@@ -22,16 +22,7 @@ import { readU32LE } from '../../src/binaryBytes.ts'
 import { Msv5SectionId } from '../../src/msv5/binaryMsv5Constants.ts'
 import { giantVocabulary, sparseFields } from '../benchmarkScenarios.js'
 import { loadDivinaLines } from '../loadDivinaLines.js'
-import { intArg, timed } from './cpuBenchUtils.mjs'
-
-function argValue(name) {
-  for (let i = 0; i < process.argv.length; i++) {
-    const arg = process.argv[i]
-    if (arg === `--${name}`) return process.argv[i + 1]
-    if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3)
-  }
-  return undefined
-}
+import { argValue, intArg, timed } from './cpuBenchUtils.mjs'
 
 const scenarios = {
   sparse: () => {
@@ -58,7 +49,7 @@ const scenarios = {
   },
 }
 
-const scenarioKey = argValue('scenario') ?? 'sparse'
+const scenarioKey = argValue('--scenario') ?? 'sparse'
 const warmup = intArg('warmup', 5, { min: 0 })
 const iterations = intArg('iterations', 40)
 

@@ -34,29 +34,7 @@ import {
   giantVocabulary,
   highFrequencyTerms,
 } from '../benchmarkScenarios.js'
-
-function argValue(name) {
-  for (let i = 0; i < process.argv.length; i++) {
-    const arg = process.argv[i]
-    if (arg === `--${name}`) return process.argv[i + 1]
-    if (arg.startsWith(`--${name}=`)) return arg.slice(name.length + 3)
-  }
-  return undefined
-}
-
-function intArg(name, fallback) {
-  const raw = argValue(name)
-  const value = raw == null ? NaN : Number(raw)
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
-}
-
-function median(nums) {
-  const sorted = [...nums].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid]
-}
+import { argValue, intArg, median } from './cpuBenchUtils.mjs'
 
 function readDocId(docIds, index) {
   return docIds[index]
@@ -443,7 +421,7 @@ function endToEndPolicies(realCases, policies, warmup, iterations) {
 const warmup = intArg('warmup', 25)
 const iterations = intArg('iterations', 100)
 const microIterations = intArg('microIterations', Math.min(iterations, 120))
-const outPath = argValue('out') ?? '/tmp/calibrate-gate-posting-ratio.json'
+const outPath = argValue('--out') ?? '/tmp/calibrate-gate-posting-ratio.json'
 
 console.error('Layer 1: synthetic micro grid...')
 const syntheticMicro = collectSyntheticMicro(warmup, microIterations)
