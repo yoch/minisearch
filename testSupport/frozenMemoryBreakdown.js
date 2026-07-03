@@ -1,3 +1,6 @@
+import { storedFieldsJsonBytes, storedFieldsSlotCount } from '../src/storedFieldsLayoutMetrics.js'
+
+// Keep this aligned with FrozenPostingsLayout dense/sparse buffers.
 function postingsTypedBytes(layout) {
   const allDocIdsBytes = layout.allDocIds.byteLength
   const allFreqsBytes = layout.allFreqs.byteLength
@@ -24,28 +27,6 @@ function postingsTypedBytes(layout) {
     totalTypedBytes: allDocIdsBytes + allFreqsBytes + offsetsBytes + lengthsBytes,
     slotCount: layout.sparseFieldIds.length,
   }
-}
-
-function storedFieldsJsonBytes(layout) {
-  if (layout.kind === 'none') return 0
-  if (layout.kind === 'multi') {
-    let total = 0
-    for (const row of layout.rows) {
-      if (row != null) total += JSON.stringify(row).length
-    }
-    return total
-  }
-
-  let total = 0
-  for (const value of layout.values) {
-    if (value !== undefined) total += JSON.stringify({ [layout.field]: value }).length
-  }
-  return total
-}
-
-function storedFieldsSlotCount(layout) {
-  if (layout.kind === 'none') return 0
-  return layout.kind === 'single' ? layout.values.length : layout.rows.length
 }
 
 /** Benchmark/test-only retained structure estimate for source and dist builds. */

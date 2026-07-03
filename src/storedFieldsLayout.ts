@@ -8,6 +8,8 @@ export type StoredFieldsLayout
     | { kind: 'single', field: string, values: unknown[] }
     | { kind: 'multi', rows: (Record<string, unknown> | undefined)[] }
 
+export { storedFieldsJsonBytes, storedFieldsSlotCount } from './storedFieldsLayoutMetrics.js'
+
 export function createStoredFieldsLayout(
   storeFields: readonly string[],
   capacity = 0,
@@ -117,27 +119,4 @@ export function storedFieldsToWireRows(
   if (layout.kind === 'none') return rows
   for (let i = 0; i < nextId; i++) rows[i] = readStoredFields(layout, i)
   return rows
-}
-
-export function storedFieldsJsonBytes(layout: StoredFieldsLayout): number {
-  if (layout.kind === 'none') return 0
-  if (layout.kind === 'multi') {
-    let total = 0
-    for (const row of layout.rows) {
-      if (row != null) total += JSON.stringify(row).length
-    }
-    return total
-  }
-  let total = 0
-  const { field, values } = layout
-  for (let i = 0; i < values.length; i++) {
-    const value = values[i]
-    if (value !== undefined) total += JSON.stringify({ [field]: value }).length
-  }
-  return total
-}
-
-export function storedFieldsSlotCount(layout: StoredFieldsLayout): number {
-  if (layout.kind === 'none') return 0
-  return layout.kind === 'single' ? layout.values.length : layout.rows.length
 }
