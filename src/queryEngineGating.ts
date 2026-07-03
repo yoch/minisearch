@@ -157,6 +157,7 @@ export function collectCombinedDocIds<T>(
   const docIds = collectBranch(branches[0], allowedDocs)
   if (op === 'and') {
     for (let i = 1; i < branches.length; i++) {
+      if (docIds.size === 0) return docIds
       intersectDocIdsInPlace(docIds, collectBranch(branches[i], docIds))
     }
     return docIds
@@ -165,6 +166,7 @@ export function collectCombinedDocIds<T>(
   if (op === 'and_not') {
     for (let i = 1; i < branches.length; i++) {
       subtractDocIdsInPlace(docIds, collectBranch(branches[i], docIds))
+      if (docIds.size === 0) return docIds
     }
     return docIds
   }
@@ -261,6 +263,7 @@ export function executeCombinedBranches<T>(
     let gate = gateFromResult(result)
     for (let i = 1; i < branches.length; i++) {
       subtractDocIdsFromResult(result, collectBranch(branches[i], gate))
+      if (result.size === 0) return result
       gate = gateFromResult(result)
     }
     return result
