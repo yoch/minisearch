@@ -298,7 +298,6 @@ function collectDocIdsForQueryInternal(
 
   const normalized = normalizeStringQuery(query, searchOptions, params)
   const { specs, operator } = normalized
-  const combineWith = (operator ?? params.globalSearchOptions.combineWith) as CombinationOperator
 
   if (specs.length <= 1) {
     return specs.length === 1
@@ -308,7 +307,7 @@ function collectDocIdsForQueryInternal(
 
   return collectCombinedDocIds(
     specs,
-    combineWith,
+    operator,
     (spec, branchAllowed) => collectDocIdsForQuerySpec(spec, normalized, params, branchAllowed),
     allowedDocs,
   )
@@ -371,12 +370,11 @@ function executeQueryInternal(
 
   const normalized = normalizeStringQuery(query, searchOptions, params)
   const { specs, operator } = normalized
-  const combineWith = (operator ?? params.globalSearchOptions.combineWith) as CombinationOperator
 
-  if (useGatedEvaluation(run, specs.length, combineWith, false)) {
+  if (useGatedEvaluation(run, specs.length, operator, false)) {
     return executeCombinedBranches(
       specs,
-      combineWith,
+      operator,
       params,
       (spec, branchAllowed) => executeQuerySpecInternal(spec, normalized, params, branchAllowed),
       (spec, branchAllowed) => collectDocIdsForQuerySpec(spec, normalized, params, branchAllowed),
@@ -388,7 +386,7 @@ function executeQueryInternal(
   }
 
   const results = specs.map(spec => executeQuerySpecInternal(spec, normalized, params, allowedDocs))
-  return combineResults(results, combineWith)
+  return combineResults(results, operator)
 }
 
 export function executeQuery(
