@@ -60,42 +60,6 @@ export function choosePostingsLayout(
   return denseBytes <= sparseBytes ? 'dense' : 'sparse'
 }
 
-export function postingsTypedBytes(layout: FrozenPostingsLayout): {
-  allDocIdsBytes: number
-  allFreqsBytes: number
-  offsetsBytes: number
-  lengthsBytes: number
-  totalTypedBytes: number
-  slotCount: number
-} {
-  const allDocIdsBytes = layout.allDocIds.byteLength
-  const allFreqsBytes = layout.allFreqs.byteLength
-  if (layout.layout === 'dense') {
-    const offsetsBytes = layout.denseOffsets.byteLength
-    const lengthsBytes = layout.denseLengths.byteLength
-    return {
-      allDocIdsBytes,
-      allFreqsBytes,
-      offsetsBytes,
-      lengthsBytes,
-      totalTypedBytes: allDocIdsBytes + allFreqsBytes + offsetsBytes + lengthsBytes,
-      slotCount: layout.termCount * layout.fieldCount,
-    }
-  }
-
-  const offsetsBytes = layout.sparseOffsets.byteLength + layout.sparseTermStarts.byteLength
-  const lengthsBytes = layout.sparseLengths.byteLength + layout.sparseFieldIds.byteLength
-  const slotCount = layout.sparseFieldIds.length
-  return {
-    allDocIdsBytes,
-    allFreqsBytes,
-    offsetsBytes,
-    lengthsBytes,
-    totalTypedBytes: allDocIdsBytes + allFreqsBytes + offsetsBytes + lengthsBytes,
-    slotCount,
-  }
-}
-
 export function validateFrozenPostingsLayout(
   layout: FrozenPostingsLayout,
   documentCount: number,

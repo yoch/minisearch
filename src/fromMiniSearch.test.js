@@ -1,6 +1,7 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from './FrozenMiniSearch'
-import { frozenFromMiniSearch, frozenMemoryBreakdown } from './internal/frozenInternals'
+import { frozenMemoryBreakdown } from '../testSupport/frozenMemoryBreakdown.js'
+import { frozenFromMiniSearch } from './internal/frozenInternals'
 
 const docs = [
   { id: 1, title: 'Moby Dick', text: 'Call me Ishmael whale sea' },

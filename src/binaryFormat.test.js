@@ -1,6 +1,7 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from './FrozenMiniSearch'
-import { frozenFromMiniSearch, frozenMemoryBreakdown } from './internal/frozenInternals'
+import { frozenMemoryBreakdown } from '../testSupport/frozenMemoryBreakdown.js'
+import { frozenFromMiniSearch } from './internal/frozenInternals'
 import PackedRadixTree from './PackedRadixTree'
 import { packTermsFromList } from './PackedRadixTree/packTermList'
 import CRC32 from 'crc-32'

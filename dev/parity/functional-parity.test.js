@@ -4,8 +4,8 @@ import { createFrozenIndexBuilder } from '../../src/frozenBuild'
 import {
   frozenFromMiniSearch,
   frozenFromMiniSearchSnapshot,
-  frozenMemoryBreakdown,
 } from '../../src/internal/frozenInternals'
+import { frozenMemoryBreakdown } from '../../testSupport/frozenMemoryBreakdown.js'
 import { overflowFrequencies } from '../../benchmarks/benchmarkScenarios.js'
 import {
   expectSameResults,

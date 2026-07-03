@@ -4,18 +4,13 @@ import { buildFrozenAssembleParamsFromMiniSearchSnapshot, type MiniSearchSnapsho
 import { type FrozenTermIndex } from '../frozenTermIndex'
 import type { IdToShortIdLookup } from '../frozenIdLookup'
 import {
-  postingsTypedBytes,
   type FrozenPostingsLayout,
 } from '../frozenPostings'
 import type { FieldLengthArray } from '../fieldLengthMatrix'
-import type { FrozenAssembleParams, FrozenMemoryBreakdown, OptionsWithDefaults } from '../frozenTypes'
+import type { FrozenAssembleParams, OptionsWithDefaults } from '../frozenTypes'
 import { type SnapshotOwnershipMode } from '../frozenOwnedSnapshot'
 import type { StoredFieldsLayout } from '../storedFieldsLayout'
-import {
-  readStoredFields,
-  storedFieldsJsonBytes,
-  storedFieldsSlotCount,
-} from '../storedFieldsLayout'
+import { readStoredFields } from '../storedFieldsLayout'
 import type { Options, Query, SearchOptions } from '../searchTypes'
 import { finalizeRawSearchResults, type RawResult } from '../scoring'
 import {
@@ -74,54 +69,6 @@ export function frozenFromMiniSearch<T, I extends FrozenMiniSearchCore<T>>(
   options: Options<T> = {} as Options<T>,
 ): I {
   return frozenFromMiniSearchSnapshot(Ctor, source.toJSON(), options)
-}
-
-/** Benchmark-only retained structure estimate. */
-export function frozenMemoryBreakdown<T>(frozen: FrozenMiniSearchCore<T>): FrozenMemoryBreakdown {
-  const view = viewOf(frozen)
-  const postingsStats = postingsTypedBytes(view._postings)
-  const storedJson = storedFieldsJsonBytes(view._storedFields)
-  const radixEst = view._index.packedByteLength()
-  const idMapBytes = view._idLookup.mode === 'lazy-map' ? view._idLookup.mapEntryCount * 32 : 0
-
-  const estimatedStructuredBytes
-    = postingsStats.totalTypedBytes
-      + view._fieldLengthMatrix.byteLength
-      + view._avgFieldLength.byteLength
-      + radixEst
-      + storedJson
-      + idMapBytes
-
-  return {
-    termCount: frozen.termCount,
-    documentCount: view._documentCount,
-    nextId: view._nextId,
-    postings: {
-      slotCount: postingsStats.slotCount,
-      layout: view._postings.layout,
-      docIdWidth: view._postings.docIdWidth,
-      allDocIdsBytes: postingsStats.allDocIdsBytes,
-      allFreqsBytes: postingsStats.allFreqsBytes,
-      offsetsBytes: postingsStats.offsetsBytes,
-      lengthsBytes: postingsStats.lengthsBytes,
-      totalTypedBytes: postingsStats.totalTypedBytes,
-    },
-    termIndex: {
-      nodeCount: view._index.packedNodeCount(),
-      edgeCount: view._index.packedEdgeCount(),
-      estimatedBytes: radixEst,
-    },
-    documents: {
-      externalIdsSlots: view._externalIds.length,
-      storedFieldsSlots: storedFieldsSlotCount(view._storedFields),
-      idLookupMode: view._idLookup.mode,
-      idToShortIdEntries: view._idLookup.mapEntryCount,
-      fieldLengthMatrixBytes: view._fieldLengthMatrix.byteLength,
-      avgFieldLengthBytes: view._avgFieldLength.byteLength,
-      storedFieldsJsonBytes: storedJson,
-    },
-    estimatedStructuredBytes,
-  }
 }
 
 export function frozenTermIndex<T>(frozen: FrozenMiniSearchCore<T>): FrozenTermIndex {

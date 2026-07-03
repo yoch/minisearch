@@ -9,11 +9,9 @@ import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../../dist/es/index.js'
 import {
   buildFrozenAssembleParamsFromMiniSearchSnapshot,
-} from '../../src/fromMiniSearch.ts'
-import {
-  frozenFromMiniSearchSnapshot,
   parseSnapshotIndex,
-} from '../harness/frozenSourceInternals.ts'
+} from '../../src/fromMiniSearch.ts'
+import { frozenFromMiniSearchSnapshot } from '../harness/frozenSourceInternals.ts'
 import { packTermsFromList } from '../../src/PackedRadixTree/packTermList.ts'
 import { validateFrozenTermIndexLeaves } from '../../src/frozenTermIndex.ts'
 import SearchableMap, { packSearchableMap } from '../../testSupport/upstreamSearchableMap.js'

@@ -1,6 +1,15 @@
 import { labelSlice } from '../src/PackedRadixTree/strings.js'
 import { emitSubtree } from '../src/PackedRadixTree/stringEmit.js'
 
+/** @typedef {import('../src/PackedRadixTree/PackedRadixTree.ts').default} PackedRadixTree */
+
+/**
+ * @param {string} heap
+ * @param {number} start
+ * @param {number} len
+ * @param {string} key
+ * @param {number} keyOff
+ */
 function labelsMatch(heap, start, len, key, keyOff) {
   for (let i = 0; i < len; i++) {
     if (heap.charCodeAt(start + i) !== key.charCodeAt(keyOff + i)) return false
@@ -8,6 +17,11 @@ function labelsMatch(heap, start, len, key, keyOff) {
   return true
 }
 
+/**
+ * @param {PackedRadixTree} tree
+ * @param {number} node
+ * @param {number} firstChar
+ */
 function findEdge(tree, node, firstChar) {
   const end = tree.nodeEdgeOffset[node + 1]
   const heap = tree.labelHeap
@@ -17,6 +31,11 @@ function findEdge(tree, node, firstChar) {
   return -1
 }
 
+/**
+ * @param {PackedRadixTree} tree
+ * @param {string} prefix
+ * @returns {{ node: number, prefix: string } | null}
+ */
 function resolvePrefixWalk(tree, prefix) {
   if (prefix.length === 0) {
     return { node: 0, prefix: '' }
@@ -51,7 +70,12 @@ function resolvePrefixWalk(tree, prefix) {
   return { node, prefix: prefixStr }
 }
 
-/** Test/bench helper. Production code should use prefixRefs + termByIndex. */
+/**
+ * Test/bench helper. Production code should use prefixRefs + termByIndex.
+ * @param {PackedRadixTree} tree
+ * @param {string} prefix
+ * @returns {IterableIterator<[string, number]>}
+ */
 export function* packedPrefixEntries(tree, prefix) {
   const start = resolvePrefixWalk(tree, prefix)
   if (start == null) return

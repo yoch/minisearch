@@ -7,9 +7,11 @@ const allowedFiles = new Set([
   'src/internal/frozenInternals.ts',
   'benchmarks/harness/frozenSourceInternals.ts',
   'benchmarks/harness/frozenDistInternals.mjs',
+  'testSupport/frozenMemoryBreakdown.js',
 ])
 
 const codeFile = /\.(?:cjs|js|mjs|ts)$/
+const importPrefix = String.raw`(?:from\s+|import\s*\(\s*|require\s*\(\s*)`
 
 const forbidden = [
   {
@@ -104,18 +106,18 @@ function pushImportViolations(files, rules) {
 pushImportViolations(productFiles, [
   {
     label: 'product import from tooling/test tree',
-    pattern: /from\s+['"][^'"]*(?:benchmarks|dev|testSupport)\//g,
+    pattern: new RegExp(`${importPrefix}['"][^'"]*(?:benchmarks|dev|testSupport)/`, 'g'),
   },
   {
     label: 'product import of PackedRadix dev string iterator',
-    pattern: /from\s+['"][^'"]*PackedRadixTree\/devStringIterators(?:\.[jt]s)?['"]/g,
+    pattern: new RegExp(`${importPrefix}['"][^'"]*PackedRadixTree/devStringIterators(?:\\.[jt]s)?['"]`, 'g'),
   },
 ])
 
 pushImportViolations(benchmarkFiles, [
   {
     label: 'benchmark direct import of src/internal frozenInternals',
-    pattern: /from\s+['"][^'"]*src\/internal\/frozenInternals(?:\.[jt]s)?['"]/g,
+    pattern: new RegExp(`${importPrefix}['"][^'"]*src/internal/frozenInternals(?:\\.[jt]s)?['"]`, 'g'),
   },
 ])
 
@@ -124,7 +126,7 @@ if (importViolations.length > 0) {
   for (const v of importViolations) {
     console.error(`  ${v.file}:${v.line} ${v.rule}: ${v.match}`)
   }
-  console.error('\nUse benchmarks/harness/frozenSourceInternals.ts for benchmark internals.')
+  console.error('\nUse benchmarks/harness/frozenSourceInternals.ts for src/internal/frozenInternals access.')
   process.exit(1)
 }
 
@@ -158,4 +160,6 @@ if (violations.length > 0) {
   process.exit(1)
 }
 
-console.log(`Internal boundary OK (${consumerFiles.length} files checked).`)
+console.log(
+  `Internal boundary OK (product=${productFiles.length}, benchmarks=${benchmarkFiles.length}, consumers=${consumerFiles.length}).`
+)

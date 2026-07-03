@@ -1,7 +1,8 @@
 import zlib from 'node:zlib'
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../FrozenMiniSearch'
-import { frozenFromMiniSearch, frozenMemoryBreakdown } from '../internal/frozenInternals'
+import { frozenMemoryBreakdown } from '../../testSupport/frozenMemoryBreakdown.js'
+import { frozenFromMiniSearch } from '../internal/frozenInternals'
 import {
   decodeFrozenSnapshot,
   BINARY_MAGIC_V5,
