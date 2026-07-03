@@ -148,7 +148,6 @@ export default class FrozenMiniSearchCore<T = any> {
   protected readonly _termCount: number
   protected readonly _postings: FrozenPostingsLayout
   protected readonly _fieldTermFlyweight: FrozenFieldTermFlyweight
-  private readonly _aggregateContext: AggregateContext
   private readonly _queryEngineParams: QueryEngineParams
   private readonly _hasStoredFields: boolean
 
@@ -169,7 +168,7 @@ export default class FrozenMiniSearchCore<T = any> {
     this._fieldTermFlyweight = createFrozenFieldTermFlyweight(this._postings)
     this._hasStoredFields = this._storedFields.kind !== 'none'
 
-    this._aggregateContext = {
+    const aggregateContext: AggregateContext = {
       documentCount: this._documentCount,
       avgFieldLength: this._avgFieldLength,
       fieldIds: this._fieldIds,
@@ -199,7 +198,7 @@ export default class FrozenMiniSearchCore<T = any> {
               forEachLiveShortId(this._nextId, this._externalIds, callback)
             },
       ),
-      aggregateContext: this._aggregateContext,
+      aggregateContext,
     }
   }
 
