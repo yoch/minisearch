@@ -1,3 +1,11 @@
+// Runtime JS on purpose: dist benchmark harnesses import this from plain Node
+// (package engine >=20), so this cannot depend on a TS loader.
+/** @typedef {import('./storedFieldsLayout.ts').StoredFieldsLayout} StoredFieldsLayout */
+
+/**
+ * @param {StoredFieldsLayout} layout
+ * @returns {number}
+ */
 export function storedFieldsJsonBytes(layout) {
   if (layout.kind === 'none') return 0
   if (layout.kind === 'multi') {
@@ -17,6 +25,10 @@ export function storedFieldsJsonBytes(layout) {
   return total
 }
 
+/**
+ * @param {StoredFieldsLayout} layout
+ * @returns {number}
+ */
 export function storedFieldsSlotCount(layout) {
   if (layout.kind === 'none') return 0
   return layout.kind === 'single' ? layout.values.length : layout.rows.length
