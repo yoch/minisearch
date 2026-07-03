@@ -226,13 +226,7 @@ function collectDocIdsForQuerySpec(
   const docIds = new Set<number>()
   const { indexView, aggregateContext } = params
 
-  forEachQuerySpecTermRef(query, normalized, params, (kind, termIndex) => {
-    if (kind === 'exact') {
-      if (termIndex != null) {
-        indexView.collectDocIds(termIndex, fieldBoosts, aggregateContext, docIds, allowedDocs)
-      }
-      return
-    }
+  forEachQuerySpecTermRef(query, normalized, params, (_kind, termIndex) => {
     if (termIndex != null) {
       indexView.collectDocIds(termIndex, fieldBoosts, aggregateContext, docIds, allowedDocs)
     }
