@@ -1,7 +1,7 @@
 import FrozenMiniSearch from './FrozenMiniSearch'
 import { buildBinarySnapshotInput } from './frozenBinaryShared'
 import { fieldLengthMatrixWireFlags } from './fieldLengthMatrixWire'
-import { frozenFieldLengthMatrix } from './internal/frozenInternals'
+import { frozenFieldLengthMatrix } from '../testSupport/frozenMemoryBreakdown.js'
 import {
   FLAG_FL_U8,
   FLAG_FL_U16,

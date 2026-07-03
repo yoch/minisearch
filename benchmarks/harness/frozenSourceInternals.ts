@@ -9,12 +9,14 @@ export {
   executeRaw,
   executeRawWithRunOptions,
   finalizeRaw,
-  frozenAssembleWithCtor,
-  frozenFromMiniSearch,
-  frozenFromMiniSearchSnapshot,
   frozenPostings,
   frozenTermIndex,
   mergedAutoSuggestOptions,
   searchWithRunOptions,
 } from '../../src/internal/frozenInternals'
+export {
+  frozenAssembleWithCtor,
+  frozenFromMiniSearch,
+  frozenFromMiniSearchSnapshot,
+} from '../../testSupport/frozenImportHelpers.ts'
 export { frozenMemoryBreakdown } from '../../testSupport/frozenMemoryBreakdown.js'

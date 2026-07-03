@@ -1,9 +1,7 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../../src/FrozenMiniSearch'
-import {
-  frozenFromMiniSearch,
-  frozenTermIndex,
-} from '../../src/internal/frozenInternals'
+import { frozenFromMiniSearch } from '../../testSupport/frozenImportHelpers'
+import { frozenTermIndex } from '../../src/internal/frozenInternals'
 import { searchNaive } from './queryEngineHarness'
 
 const docs = [

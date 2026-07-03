@@ -94,3 +94,8 @@ export function frozenMemoryBreakdown(frozen) {
     estimatedStructuredBytes,
   }
 }
+
+/** Test-only access to the compact field-length matrix backing array. */
+export function frozenFieldLengthMatrix(frozen) {
+  return frozen._fieldLengthMatrix
+}

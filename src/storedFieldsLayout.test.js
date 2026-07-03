@@ -1,6 +1,6 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from './FrozenMiniSearch'
-import { frozenFromMiniSearch } from './internal/frozenInternals'
+import { frozenFromMiniSearch } from '../testSupport/frozenImportHelpers'
 import {
   createStoredFieldsLayout,
   readStoredFields,

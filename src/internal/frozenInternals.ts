@@ -1,17 +1,10 @@
 import type FrozenMiniSearchCore from '../FrozenMiniSearchCore'
-import { materializeFrozenAssembleParams, type FrozenMiniSearchCtor } from '../FrozenMiniSearchCore'
-import { buildFrozenAssembleParamsFromMiniSearchSnapshot, type MiniSearchSnapshot } from '../fromMiniSearch'
 import { type FrozenTermIndex } from '../frozenTermIndex'
-import type { IdToShortIdLookup } from '../frozenIdLookup'
-import {
-  type FrozenPostingsLayout,
-} from '../frozenPostings'
-import type { FieldLengthArray } from '../fieldLengthMatrix'
-import type { FrozenAssembleParams, OptionsWithDefaults } from '../frozenTypes'
-import { type SnapshotOwnershipMode } from '../frozenOwnedSnapshot'
+import { type FrozenPostingsLayout } from '../frozenPostings'
+import type { OptionsWithDefaults } from '../frozenTypes'
 import type { StoredFieldsLayout } from '../storedFieldsLayout'
 import { readStoredFields } from '../storedFieldsLayout'
-import type { Options, Query, SearchOptions } from '../searchTypes'
+import type { Query, SearchOptions } from '../searchTypes'
 import { finalizeRawSearchResults, type RawResult } from '../scoring'
 import {
   executeQuery,
@@ -23,12 +16,7 @@ import type { QueryEngineRunOptions } from '../queryEngineGateLimits'
 type FrozenInternalView<T = any> = {
   _options: OptionsWithDefaults<T>
   _index: FrozenTermIndex
-  _documentCount: number
-  _nextId: number
   _externalIds: unknown[]
-  _idLookup: IdToShortIdLookup
-  _fieldLengthMatrix: FieldLengthArray
-  _avgFieldLength: Float32Array
   _storedFields: StoredFieldsLayout
   _postings: FrozenPostingsLayout
   _queryEngineParams: QueryEngineParams
@@ -38,49 +26,12 @@ function viewOf<T>(frozen: FrozenMiniSearchCore<T>): FrozenInternalView<T> {
   return frozen as unknown as FrozenInternalView<T>
 }
 
-/** Test/benchmark-only low-level assembly path. */
-export function frozenAssembleWithCtor<T, I extends FrozenMiniSearchCore<T>>(
-  params: FrozenAssembleParams<T>,
-  trustedSource: boolean,
-  ownershipMode: SnapshotOwnershipMode,
-  Ctor: FrozenMiniSearchCtor<T, I>,
-): I {
-  return new Ctor(materializeFrozenAssembleParams(params, trustedSource, ownershipMode))
-}
-
-/** Test/benchmark-only import path from a pre-parsed MiniSearch snapshot. */
-export function frozenFromMiniSearchSnapshot<T, I extends FrozenMiniSearchCore<T>>(
-  Ctor: FrozenMiniSearchCtor<T, I>,
-  snapshot: MiniSearchSnapshot,
-  options: Options<T> = {} as Options<T>,
-): I {
-  return frozenAssembleWithCtor(
-    buildFrozenAssembleParamsFromMiniSearchSnapshot(snapshot, options),
-    false,
-    'minisearch-json',
-    Ctor,
-  )
-}
-
-/** Test/benchmark-only import path from an object exposing MiniSearch `toJSON()`. */
-export function frozenFromMiniSearch<T, I extends FrozenMiniSearchCore<T>>(
-  Ctor: FrozenMiniSearchCtor<T, I>,
-  source: { toJSON(): MiniSearchSnapshot },
-  options: Options<T> = {} as Options<T>,
-): I {
-  return frozenFromMiniSearchSnapshot(Ctor, source.toJSON(), options)
-}
-
 export function frozenTermIndex<T>(frozen: FrozenMiniSearchCore<T>): FrozenTermIndex {
   return viewOf(frozen)._index
 }
 
 export function frozenPostings<T>(frozen: FrozenMiniSearchCore<T>): FrozenPostingsLayout {
   return viewOf(frozen)._postings
-}
-
-export function frozenFieldLengthMatrix<T>(frozen: FrozenMiniSearchCore<T>): FieldLengthArray {
-  return viewOf(frozen)._fieldLengthMatrix
 }
 
 function frozenQueryEngineParams<T>(frozen: FrozenMiniSearchCore<T>): QueryEngineParams {

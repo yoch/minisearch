@@ -3,10 +3,12 @@ import FrozenMiniSearch from '../FrozenMiniSearch'
 import { buildFrozenAssembleParamsFromMiniSearchSnapshot, parseSnapshotIndex } from '../fromMiniSearch'
 import { defaultAutoSuggestOptions } from '../searchDefaults'
 import {
-  executeRaw,
-  finalizeRaw,
   frozenAssembleWithCtor,
   frozenFromMiniSearch,
+} from '../../testSupport/frozenImportHelpers'
+import {
+  executeRaw,
+  finalizeRaw,
   frozenPostings,
   mergedAutoSuggestOptions,
 } from './frozenInternals'

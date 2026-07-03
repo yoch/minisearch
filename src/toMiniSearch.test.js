@@ -1,6 +1,6 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from './FrozenMiniSearch'
-import { frozenFromMiniSearchSnapshot } from './internal/frozenInternals'
+import { frozenFromMiniSearchSnapshot } from '../testSupport/frozenImportHelpers'
 
 const docs = [
   { id: 1, title: 'Moby Dick', text: 'Call me Ishmael whale sea' },

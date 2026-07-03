@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../FrozenMiniSearch'
-import { frozenFromMiniSearch } from '../internal/frozenInternals'
+import { frozenFromMiniSearch } from '../../testSupport/frozenImportHelpers'
 import { writeU32LE } from '../binaryBytes'
 import {
   CODEC_RAW,
