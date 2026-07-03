@@ -1,5 +1,6 @@
 import { IncrementalPostingsAccumulator } from './incrementalPostings'
-import { choosePostingsLayout, validateFrozenPostingsLayout } from './frozenPostings'
+import { choosePostingsLayout, collectDocIdsFromFrozenLayout, validateFrozenPostingsLayout } from './frozenPostings'
+import { shouldSeekAllowedDocs } from './compactPostings'
 
 function buildLayout(fieldCount, postings, nextId = 10) {
   const acc = new IncrementalPostingsAccumulator(fieldCount)
@@ -166,5 +167,102 @@ describe('validateFrozenPostingsLayout', () => {
     const fail = vi.fn((detail) => { throw new Error(`custom:${detail}`) })
     expect(() => validateFrozenPostingsLayout(layout, 11, 10, fail)).toThrow(/custom:documentCount/)
     expect(fail).toHaveBeenCalled()
+  })
+})
+
+function collectDocIds(layout, termIndex, fieldBoosts, context, allowedDocs) {
+  const docIds = new Set()
+  collectDocIdsFromFrozenLayout(layout, termIndex, fieldBoosts, context, docIds, allowedDocs)
+  return [...docIds].sort((a, b) => a - b)
+}
+
+function makeCollectContext(fieldIds, documentCount = 10) {
+  return {
+    documentCount,
+    avgFieldLength: new Float32Array(Object.keys(fieldIds).length || 1),
+    fieldIds,
+    getFieldLength: () => 5,
+    getExternalId: docId => docId,
+    resolveTermByIndex: () => '',
+    getStoredFields: () => undefined,
+  }
+}
+
+function rangePostings(termIndex, fieldId, from, to) {
+  const postings = []
+  for (let docId = from; docId <= to; docId++) {
+    postings.push({ termIndex, fieldId, docId, freq: 1 })
+  }
+  return postings
+}
+
+describe('collectDocIdsFromFrozenLayout', () => {
+  test('dense layout unions doc ids across boosted fields for one term', () => {
+    const layout = buildLayout(2, [
+      { termIndex: 0, fieldId: 0, docId: 1, freq: 1 },
+      { termIndex: 0, fieldId: 0, docId: 3, freq: 1 },
+      { termIndex: 0, fieldId: 1, docId: 2, freq: 1 },
+      { termIndex: 0, fieldId: 1, docId: 4, freq: 1 },
+    ])
+    expect(layout.layout).toBe('dense')
+
+    const context = makeCollectContext({ a: 0, b: 1 })
+    const fieldBoosts = { names: ['a', 'b'], boosts: { a: 1, b: 1 } }
+    expect(collectDocIds(layout, 0, fieldBoosts, context)).toEqual([1, 2, 3, 4])
+  })
+
+  test('sparse layout unions doc ids across boosted fields for one term', () => {
+    const layout = buildLayout(4, [
+      { termIndex: 0, fieldId: 0, docId: 1, freq: 1 },
+      { termIndex: 0, fieldId: 2, docId: 1, freq: 3 },
+      { termIndex: 0, fieldId: 2, docId: 5, freq: 2 },
+    ])
+    expect(layout.layout).toBe('sparse')
+
+    const context = makeCollectContext({ f0: 0, f2: 2 })
+    const fieldBoosts = { names: ['f0', 'f2'], boosts: { f0: 1, f2: 1 } }
+    expect(collectDocIds(layout, 0, fieldBoosts, context)).toEqual([1, 5])
+  })
+
+  test('empty allowedDocs gate collects nothing', () => {
+    const layout = buildLayout(1, [
+      { termIndex: 0, fieldId: 0, docId: 1, freq: 1 },
+      { termIndex: 0, fieldId: 0, docId: 2, freq: 1 },
+    ])
+    const context = makeCollectContext({ txt: 0 })
+    const fieldBoosts = { names: ['txt'], boosts: { txt: 1 } }
+    expect(collectDocIds(layout, 0, fieldBoosts, context, new Set())).toEqual([])
+  })
+
+  test('long postings use seek path and honor selective allowedDocs', () => {
+    const layout = buildLayout(1, rangePostings(0, 0, 0, 2999), 3000)
+    const postingLength = layout.denseLengths[0]
+    const allowed = new Set([5, 100, 999])
+    expect(shouldSeekAllowedDocs(allowed.size, postingLength)).toBe(true)
+
+    const context = makeCollectContext({ txt: 0 }, 3000)
+    const fieldBoosts = { names: ['txt'], boosts: { txt: 1 } }
+    expect(collectDocIds(layout, 0, fieldBoosts, context, allowed)).toEqual([5, 100, 999])
+  })
+
+  test('short postings use scan path and honor selective allowedDocs', () => {
+    const layout = buildLayout(1, rangePostings(0, 0, 0, 99), 100)
+    const postingLength = layout.denseLengths[0]
+    const allowed = new Set([4, 40, 41, 42])
+    expect(shouldSeekAllowedDocs(allowed.size, postingLength)).toBe(false)
+
+    const context = makeCollectContext({ txt: 0 }, 100)
+    const fieldBoosts = { names: ['txt'], boosts: { txt: 1 } }
+    expect(collectDocIds(layout, 0, fieldBoosts, context, allowed)).toEqual([4, 40, 41, 42])
+  })
+
+  test('skips fields omitted from fieldBoosts', () => {
+    const layout = buildLayout(2, [
+      { termIndex: 0, fieldId: 0, docId: 1, freq: 1 },
+      { termIndex: 0, fieldId: 1, docId: 2, freq: 1 },
+    ])
+    const context = makeCollectContext({ a: 0, b: 1 })
+    const fieldBoosts = { names: ['a'], boosts: { a: 1 } }
+    expect(collectDocIds(layout, 0, fieldBoosts, context)).toEqual([1])
   })
 })
