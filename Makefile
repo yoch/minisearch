@@ -187,17 +187,6 @@ benchmark-record: build
 benchmark-diff:
 	$(NODE) $(EXPOSE) benchmarks/diffBaseline.js
 
-# Specialised variants of captureBaseline.js
-.PHONY: benchmark-record-quick benchmark-record-search benchmark-baseline-update
-benchmark-record-quick: build
-	RUNS=1 SEARCH_ITERATIONS=10 BENCH_WARMUP=20 $(BENCH_TSX) benchmarks/captureBaseline.js
-
-benchmark-record-search: build
-	BENCH_SEARCH_ONLY=1 $(BENCH_TSX) benchmarks/captureBaseline.js
-
-benchmark-baseline-update: build
-	$(BENCH_TSX) benchmarks/captureBaseline.js --reference
-
 # Variants of diffBaseline.js
 .PHONY: benchmark-diff-run benchmark-diff-search-run
 benchmark-diff-run: build

@@ -26,15 +26,9 @@ commit, on a clean tree — not in the same commit as the version bump:
 
 ```bash
 make benchmark-record            # capture into latest.json
-make benchmark-baseline-update   # capture into reference.json (--reference)
+make bench-reference-update      # capture/promote reference.json + regenerate README table
 git add benchmarks/baselines/reference.json
 git commit -m "Refresh benchmark reference for 8.1.0."
-```
-
-Recommended workflow (profiled interface, chains capture + promotion + README regen):
-
-```bash
-make bench-reference-update
 ```
 
 > See [`../SCRIPTS.md`](../SCRIPTS.md) for the `bench:*` (profiled)

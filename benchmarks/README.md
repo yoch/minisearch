@@ -115,4 +115,4 @@ pnpm bench:readme             # regenerate README comparison from reference.json
 node benchmarks/scripts/generate-readme-comparison.mjs --from=benchmarks/baselines/latest.json
 ```
 
-Legacy: `pnpm benchmark:baseline:update` (re-runs with default regression surfaces).
+Legacy `pnpm benchmark:baseline:update` was removed; use `pnpm bench:reference:update`.

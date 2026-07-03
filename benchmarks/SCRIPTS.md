@@ -27,16 +27,15 @@ orchestration layer that delegates to them systematically:
 ## `bench:*` vs `benchmark:*` correspondences
 
 The pairs below run **the same underlying script**; the difference is that
-`bench:*` sets `BENCH_PROFILE` (and the derived env vars `RUNS`,
-`SEARCH_ITERATIONS`, `BENCH_WARMUP` in `dev` profile), while `benchmark:*`
-lets the user provide their own flags.
+`bench:*` selects a profile/surface set through `cli.mjs`, while `benchmark:*`
+lets the user provide their own environment variables directly.
 
 | `bench:*` (profiled) | `benchmark:*` (expert) | Underlying script | Difference |
 |---|---|---|---|
 | `bench` | `benchmark:compare` | `compare.js` | `bench` forces `RUNS=1 SEARCH_ITERATIONS=10 BENCH_WARMUP=20` (`dev` profile) |
-| `bench:record` | `benchmark:record` | `captureBaseline.js` | `bench:record` sets `BENCH_PROFILE` |
+| `bench:record` | `benchmark:record` | `captureBaseline.js` | `bench:record` uses profile-derived surfaces |
 | `bench:diff` | `benchmark:diff` | `diffBaseline.js` | `cli.mjs diff --run` captures a fresh `latest.json` before comparing |
-| `bench:memory` | `benchmark:record:memory` | `runHeapSuite.mjs` | `benchmark:record:memory` adds `--out=benchmarks/baselines/latest-heap.json` |
+| `bench:memory` | `make bench-memory` | `runHeapSuite.mjs` | isolated heap phase |
 
 ## Recommended workflows
 
@@ -51,13 +50,8 @@ make bench-reference-update
 #   generate-readme-comparison.mjs
 ```
 
-### Legacy (still supported, marked as such in benchmarks/scripts/README.md)
-
-```bash
-make benchmark-baseline-update   # captureBaseline.js --reference
-```
-
-Prefer `bench:reference:update` which also chains promotion and README regen.
+`benchmark:baseline:update` was removed; prefer `bench:reference:update`,
+which also chains promotion and README regeneration.
 
 ### CI regression check
 
@@ -112,7 +106,10 @@ Example:
 
 ```bash
 make benchmark-record RUNS=1 SEARCH_ITERATIONS=10 BENCH_WARMUP=20
-# equivalent to the legacy pnpm benchmark:record:quick
+# former `benchmark:record:quick`
+
+make benchmark-record BENCH_SEARCH_ONLY=1
+# former `benchmark:record:search`
 ```
 
 ### Documentation / demo

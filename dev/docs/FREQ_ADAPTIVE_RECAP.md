@@ -148,7 +148,7 @@ Absence of `FLAG_FREQ_U16` = freqs section u8 (backward compat with existing sna
 | npm script | Command | Default parameters | Scenarios | Observed duration* |
 |------------|----------|----------------------|-----------|-----------------|
 | `pnpm benchmark:validate:freq-adaptive` | `node --expose-gc benchmarks/scripts/freq-adaptive-validate.mjs` | `RUNS=1`, `SEARCH_ITERATIONS=10`, `BENCH_WARMUP=15` (env in `package.json`); prefix `pnpm build` | 3: `divina-storeFields`, `extreme-overflowFrequency`, `extreme-giantVocabulary` | **~35–40 s** measurement; **~50 s** with build |
-| `pnpm benchmark:record:quick` | `captureBaseline.js` | `RUNS=1`, `SEARCH_ITERATIONS=10`, `BENCH_WARMUP=20` | 13 (full suite) | Several minutes (vs standard `benchmark:record` **very long**) |
+| `RUNS=1 SEARCH_ITERATIONS=10 BENCH_WARMUP=20 pnpm benchmark:record` | `captureBaseline.js` | `RUNS=1`, `SEARCH_ITERATIONS=10`, `BENCH_WARMUP=20` | 13 (full suite) | Several minutes (vs standard `benchmark:record` **very long**) |
 
 \* Dev machine at implementation time (Node 24, `--expose-gc`). Structural smoke timings **do not fail** the script.
 
@@ -189,10 +189,10 @@ Absence of `FLAG_FREQ_U16` = freqs section u8 (backward compat with existing sna
 | Script | Default parameters | Aggregation | Profile |
 |--------|-------------------|------------|--------|
 | `pnpm benchmark:record` | `RUNS=3`, `SEARCH_ITERATIONS=15`, `BENCH_WARMUP=100` | median over 3 runs | `full` |
-| `pnpm benchmark:record:search` | same + `BENCH_SEARCH_ONLY=1` | median | `search` (no index/heap/save/load timing) |
+| `BENCH_SEARCH_ONLY=1 pnpm benchmark:record` | same + `BENCH_SEARCH_ONLY=1` | median | `search` (no index/heap/save/load timing) |
 | `pnpm benchmark:diff` | reads `latest.json` vs `reference.json` | — | no re-run |
 | `pnpm benchmark:diff:run` | record + diff | — | |
-| `pnpm benchmark:baseline:update` | record → `reference.json` (clean git) | — | |
+| `pnpm bench:reference:update` | record/promote → `reference.json` (clean git) + README table | — | |
 | `pnpm benchmark:targeted` | defaults `benchmarkUtils`; `--runs` CLI | median if runs>1 | 7 scenarios |
 | `pnpm benchmark:compare` | 3×15 via `compare.js` | — | readable report |
 
@@ -294,7 +294,7 @@ Exit 1 if **after** regresses vs **before** on freeze / saveBinary / loadBinary.
 pnpm benchmark:validate:freq-adaptive
 
 # Accelerated full suite (several minutes)
-pnpm benchmark:record:quick
+RUNS=1 SEARCH_ITERATIONS=10 BENCH_WARMUP=20 pnpm benchmark:record
 
 # Full golden suite (long — releases only)
 pnpm benchmark:record

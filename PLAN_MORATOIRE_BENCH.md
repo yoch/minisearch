@@ -109,13 +109,13 @@ Doublons ou dé-promotion vers Makefile / doc uniquement :
 ```
 benchmark:compare          → make benchmark-compare (advanced)
 benchmark:record           → couvert par bench:record
-benchmark:record:quick     → RUNS=1 bench:record
-benchmark:record:search    → BENCH_SEARCH_ONLY=1 bench:record
-benchmark:record:memory    → doublon bench:memory
+benchmark:record:quick     → retiré ; RUNS=1 SEARCH_ITERATIONS=10 BENCH_WARMUP=20 benchmark:record
+benchmark:record:search    → retiré ; BENCH_SEARCH_ONLY=1 benchmark:record
+benchmark:record:memory    → retiré ; doublon bench:memory
 benchmark:diff             → couvert par bench:diff
 benchmark:diff:run           → advanced
 benchmark:diff:search:run    → advanced
-benchmark:baseline:update  → remplacé par bench:reference:update
+benchmark:baseline:update  → retiré ; remplacé par bench:reference:update
 benchmark:history:analyze  → make benchmark-history-analyze
 benchmark:history:vs-mutable → idem
 benchmark:calibrate-batches
