@@ -117,6 +117,12 @@ describe('combineResults', () => {
     expect(combineResults([], AND)).toEqual(new Map())
     expect(combineResults([], AND_NOT)).toEqual(new Map())
   })
+
+  test('returns the sole operand for single-result combinations after operator validation', () => {
+    const single = new Map([[1, { score: 1, terms: ['a'], match: { a: ['text'] } }]])
+    expect(combineResults([single], OR)).toBe(single)
+    expect(() => combineResults([single], 'xor')).toThrow(/invalid combination operator/)
+  })
 })
 
 describe('aggregateTerm', () => {

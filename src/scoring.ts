@@ -423,6 +423,7 @@ export function combineResults(results: RawResult[], combineWith: CombinationOpe
   if (!combinator) {
     throw new Error(`FrozenMiniSearch: invalid combination operator: ${combineWith}`)
   }
+  if (results.length === 1) return results[0]
   return results.reduce(combinator)
 }
 
