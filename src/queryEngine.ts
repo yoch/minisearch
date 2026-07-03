@@ -385,14 +385,6 @@ function executeQueryInternal(
   return combineResults(results, operator)
 }
 
-export function executeQuery(
-  query: Query,
-  searchOptions: SearchOptions,
-  params: QueryEngineParams,
-): RawResult {
-  return executeQueryInternal(query, searchOptions, params)
-}
-
 /** @packageInternal Tests and benchmarks only. */
 export function executeQueryWithRunOptions(
   query: Query,
@@ -401,4 +393,12 @@ export function executeQueryWithRunOptions(
   run?: QueryEngineRunOptions,
 ): RawResult {
   return executeQueryInternal(query, searchOptions, params, undefined, run)
+}
+
+export function executeQuery(
+  query: Query,
+  searchOptions: SearchOptions,
+  params: QueryEngineParams,
+): RawResult {
+  return executeQueryWithRunOptions(query, searchOptions, params)
 }

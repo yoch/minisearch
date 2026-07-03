@@ -7,7 +7,6 @@ import { readStoredFields } from '../storedFieldsLayout'
 import type { Query, SearchOptions } from '../searchTypes'
 import { finalizeRawSearchResults, type RawResult } from '../scoring'
 import {
-  executeQuery,
   executeQueryWithRunOptions,
   type QueryEngineParams,
 } from '../queryEngine'
@@ -43,7 +42,7 @@ export function executeRaw<T>(
   query: Query,
   searchOptions: SearchOptions = {},
 ): RawResult {
-  return executeQuery(query, searchOptions, frozenQueryEngineParams(frozen))
+  return executeQueryWithRunOptions(query, searchOptions, frozenQueryEngineParams(frozen))
 }
 
 export function executeRawWithRunOptions<T>(
