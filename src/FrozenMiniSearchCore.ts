@@ -1,7 +1,7 @@
 import type { FrozenTermIndex } from './frozenTermIndex'
 import { validateFrozenTermIndexLeaves } from './frozenTermIndex'
 import { buildFrozenAssembleParamsFromMiniSearchSnapshot, type MiniSearchSnapshot } from './fromMiniSearch'
-import { type AggregateContext, type RawResult, finalizeRawSearchResults } from './scoring'
+import { type AggregateContext, finalizeRawSearchResults } from './scoring'
 import type { IdToShortIdLookup } from './frozenIdLookup'
 import {
   createFrozenFieldTermFlyweight,
@@ -233,7 +233,7 @@ export default class FrozenMiniSearchCore<T = any> {
    */
   search(query: Query, searchOptions: SearchOptions = {}): SearchResult[] {
     return finalizeRawSearchResults(
-      this._executeQuery(query, searchOptions),
+      runQuery(query, searchOptions, this._queryEngineParams),
       query,
       searchOptions,
       this._options.searchOptions,
@@ -250,7 +250,7 @@ export default class FrozenMiniSearchCore<T = any> {
   autoSuggest(queryString: string, options: SearchOptions = {}): Suggestion[] {
     const merged = { ...this._options.autoSuggestOptions, ...options }
     if (merged.filter == null) {
-      return suggestFromRawResults(this._executeQuery(queryString, merged))
+      return suggestFromRawResults(runQuery(queryString, merged, this._queryEngineParams))
     }
     return suggestFromSearchResults(this.search(queryString, merged))
   }
@@ -350,9 +350,5 @@ export default class FrozenMiniSearchCore<T = any> {
 
   private _getFieldLength(docId: number, fieldId: number): number {
     return this._fieldLengthMatrix[docId * this._fieldCount + fieldId] ?? 0
-  }
-
-  private _executeQuery(query: Query, searchOptions: SearchOptions = {}): RawResult {
-    return runQuery(query, searchOptions, this._queryEngineParams)
   }
 }
