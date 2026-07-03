@@ -12,7 +12,7 @@
  *   pnpm benchmark:finalize RUNS=5 BENCH_WARMUP=20 SEARCH_ITERATIONS=50
  */
 import FrozenMiniSearch from '../../src/FrozenMiniSearch.ts'
-import { executeRaw, finalizeRaw } from '../harness/frozenPipelineHarness.ts'
+import { executeRaw, finalizeRaw } from '../harness/frozenSourceInternals.ts'
 import { giantVocabulary, highFrequencyTerms } from '../benchmarkScenarios.js'
 import { intArg, median, timed } from './cpuBenchUtils.mjs'
 

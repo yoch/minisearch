@@ -5,7 +5,7 @@
  */
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../dist/es/index.js'
-import { frozenFromMiniSearch } from '../src/internal/frozenInternals.ts'
+import { frozenFromMiniSearch } from './harness/frozenSourceInternals'
 import { CODEC_RAW, CODEC_ZSTD, MSV5_PAYLOAD_CODEC_OFFSET } from '../src/msv5/binaryMsv5Constants.ts'
 import { gc } from './benchmarkUtils.js'
 import { loadDivinaLines } from './loadDivinaLines.js'

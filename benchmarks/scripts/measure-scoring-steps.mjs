@@ -26,8 +26,8 @@ import {
   frozenFromMiniSearch,
   frozenPostings,
   frozenTermIndex,
-} from '../../src/internal/frozenInternals.ts'
-import { executeRaw } from '../harness/frozenPipelineHarness.ts'
+} from '../harness/frozenSourceInternals.ts'
+import { executeRaw } from '../harness/frozenSourceInternals.ts'
 
 function argValue(name) {
   for (let i = 0; i < process.argv.length; i++) {

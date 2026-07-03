@@ -15,7 +15,7 @@ import FrozenMiniSearch from '../../src/FrozenMiniSearch.ts'
 import {
   executeRaw,
   mergedAutoSuggestOptions,
-} from '../harness/frozenPipelineHarness.ts'
+} from '../harness/frozenSourceInternals.ts'
 import { suggestFromRawResults } from '../../src/suggestions.ts'
 import { giantVocabulary, highFrequencyTerms } from '../benchmarkScenarios.js'
 import { intArg, median, timed } from './cpuBenchUtils.mjs'

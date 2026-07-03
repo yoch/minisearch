@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import SearchableMap, { packSearchableMap } from '../testSupport/upstreamSearchableMap.js'
-import { packedPrefixEntries } from '../src/PackedRadixTree/devStringIterators.js'
+import { packedPrefixEntries } from '../testSupport/packedRadixStringIterators.js'
 import { corpora } from './packedRadixCorpora.js'
 import { fuzzyCasesFromProbe } from './packedRadixFuzzyCases.js'
 import {

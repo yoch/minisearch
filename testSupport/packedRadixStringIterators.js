@@ -1,19 +1,14 @@
-/**
- * Dev/bench-only string iterators for PackedRadixTree. Not imported on the product
- * build path — keeps `prefixEntries`-style APIs out of published bundles.
- */
-import type PackedRadixTree from './PackedRadixTree'
-import { labelSlice } from './strings'
-import { emitSubtree } from './stringEmit'
+import { labelSlice } from '../src/PackedRadixTree/strings.js'
+import { emitSubtree } from '../src/PackedRadixTree/stringEmit.js'
 
-function labelsMatch(heap: string, start: number, len: number, key: string, keyOff: number): boolean {
+function labelsMatch(heap, start, len, key, keyOff) {
   for (let i = 0; i < len; i++) {
     if (heap.charCodeAt(start + i) !== key.charCodeAt(keyOff + i)) return false
   }
   return true
 }
 
-function findEdge(tree: PackedRadixTree, node: number, firstChar: number): number {
+function findEdge(tree, node, firstChar) {
   const end = tree.nodeEdgeOffset[node + 1]
   const heap = tree.labelHeap
   for (let ei = tree.nodeEdgeOffset[node]; ei < end; ei++) {
@@ -22,7 +17,7 @@ function findEdge(tree: PackedRadixTree, node: number, firstChar: number): numbe
   return -1
 }
 
-function resolvePrefixWalk(tree: PackedRadixTree, prefix: string): { node: number, prefix: string } | null {
+function resolvePrefixWalk(tree, prefix) {
   if (prefix.length === 0) {
     return { node: 0, prefix: '' }
   }
@@ -56,11 +51,8 @@ function resolvePrefixWalk(tree: PackedRadixTree, prefix: string): { node: numbe
   return { node, prefix: prefixStr }
 }
 
-/** @deprecated Dev/bench helper. Prefer `prefixRefs` + `termByIndex` in production code. */
-export function* packedPrefixEntries(
-  tree: PackedRadixTree,
-  prefix: string,
-): IterableIterator<[string, number]> {
+/** Test/bench helper. Production code should use prefixRefs + termByIndex. */
+export function* packedPrefixEntries(tree, prefix) {
   const start = resolvePrefixWalk(tree, prefix)
   if (start == null) return
   yield* emitSubtree(tree, start.node, start.prefix)

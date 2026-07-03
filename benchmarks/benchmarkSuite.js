@@ -3,7 +3,7 @@ import FrozenMiniSearch from '../dist/es/index.js'
 import {
   frozenFromMiniSearch,
   frozenFromMiniSearchSnapshot,
-} from '../src/internal/frozenInternals.ts'
+} from './harness/frozenSourceInternals.ts'
 import { median, medianRound } from './benchStats.js'
 import {
   gc,

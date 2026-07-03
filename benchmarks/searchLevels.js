@@ -3,7 +3,7 @@ import {
   benchTimedSamples,
   frozenVsMutablePct,
 } from './searchBenchTiming.js'
-import { executeRaw, frozenTermIndex } from './harness/frozenPipelineHarness.ts'
+import { executeRaw, frozenTermIndex } from './harness/frozenSourceInternals.ts'
 
 /**
  * Decompose search cost: L0 term lookup, L1 executeQuery (frozen), L2 full search (paired).

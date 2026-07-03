@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- **Benchmark internals** — source-based benchmark probes now import FrozenMiniSearch internals through `benchmarks/harness/frozenSourceInternals.ts`, with `assert-internal-boundary.cjs` guarding against new direct `benchmarks/ → src/internal` imports.
+
+### Removed
+
+- **PackedRadix dev helper** — move the `packedPrefixEntries` string iterator out of `src/` into `testSupport/packedRadixStringIterators.js`, keeping parity/bench coverage without carrying a dev-only helper in the product tree.
+
 ## v1.7.0 — `@yoch/frozenminisearch`
 
 Minor release: lower retained memory for postings metadata in frozen indexes and on the MSv5 wire. Reading older u32 metadata snapshots remains supported; newly written compact snapshots require 1.7.0+.

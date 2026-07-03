@@ -10,7 +10,7 @@ import {
 } from '../msv5/packedRadixBinaryMsv5'
 import { validateFrozenTermIndexLeaves } from '../frozenTermIndex'
 import { sortedFuzzyTuples, sortedMapFuzzy } from '../../testSupport/fuzzyParity.js'
-import { packedPrefixEntries } from './devStringIterators'
+import { packedPrefixEntries } from '../../testSupport/packedRadixStringIterators.js'
 import PackedRadixTree from './index'
 import { packTermsFromList } from './packTermList'
 

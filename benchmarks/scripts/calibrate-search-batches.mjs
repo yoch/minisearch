@@ -7,7 +7,7 @@
 import { writeFileSync } from 'node:fs'
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../../dist/es/index.js'
-import { frozenFromMiniSearch } from '../../src/internal/frozenInternals.ts'
+import { frozenFromMiniSearch } from '../harness/frozenSourceInternals.ts'
 import { buildScenarioList } from '../benchmarkSuite.js'
 import { median } from '../benchmarkUtils.js'
 import { benchHrtimeNow, benchHrtimeElapsedMs } from '../searchBenchTiming.js'

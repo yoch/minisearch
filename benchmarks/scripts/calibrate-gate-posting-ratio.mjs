@@ -27,8 +27,8 @@ import {
   frozenFromMiniSearch,
   frozenPostings,
   frozenTermIndex,
-} from '../../src/internal/frozenInternals.ts'
-import { executeRaw } from '../harness/frozenPipelineHarness.ts'
+} from '../harness/frozenSourceInternals.ts'
+import { executeRaw } from '../harness/frozenSourceInternals.ts'
 import {
   docIdUint16Boundary,
   giantVocabulary,

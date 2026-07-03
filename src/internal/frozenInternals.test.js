@@ -1,6 +1,6 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../FrozenMiniSearch'
-import { buildFrozenAssembleParamsFromMiniSearchSnapshot } from '../fromMiniSearch'
+import { buildFrozenAssembleParamsFromMiniSearchSnapshot, parseSnapshotIndex } from '../fromMiniSearch'
 import { defaultAutoSuggestOptions } from '../searchDefaults'
 import {
   executeRaw,
@@ -9,7 +9,6 @@ import {
   frozenFromMiniSearch,
   frozenPostings,
   mergedAutoSuggestOptions,
-  parseSnapshotIndex,
 } from './frozenInternals'
 
 const docs = [

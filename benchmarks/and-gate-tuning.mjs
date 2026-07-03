@@ -12,13 +12,12 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../dist/es/index.js'
-import { frozenFromMiniSearch } from '../src/internal/frozenInternals.ts'
+import { frozenFromMiniSearch, searchWithRunOptions } from './harness/frozenSourceInternals.ts'
 import {
   DEFAULT_AND_GATE_LIMITS,
   gateIsSelectiveEnough,
   resolveGateMaxSize,
 } from '../src/queryEngineGateLimits.ts'
-import { searchWithRunOptions } from '../dev/parity/queryEngineHarness.js'
 import { loadDivinaLines } from './loadDivinaLines.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

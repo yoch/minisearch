@@ -13,7 +13,7 @@ variables that drive them.
 | `benchmark:packed-radix*` | `packedRadix*.js` + dedicated rollup build (`PACKED_RADIX_BENCH=true`) | Orthogonal | Isolated PackedRadixTree subsystem |
 | `benchmark:binary-format` | `binaryFormatCompare.ts` | Orthogonal | msv5 binary format vs JS comparison |
 | `benchmark:medicaments-indexes` | `analyzeMedicamentsIndexes.js` | Orthogonal | Dedicated medicaments corpus |
-| `benchmark:profile-giant-prefix` / `benchmark:measure-scoring-steps` | `benchmarks/scripts/*.mjs` via `tsx` | Internal pipeline | Ad-hoc AND/prefix scoring probes that import `src/*.ts` helpers |
+| `benchmark:profile-giant-prefix` / `benchmark:measure-scoring-steps` | `benchmarks/scripts/*.mjs` via `tsx` | Internal pipeline | Ad-hoc AND/prefix scoring probes that use `benchmarks/harness/frozenSourceInternals.ts` |
 
 `cli.mjs` is **not** a rewrite of the legacy scripts: it is a profile-based
 orchestration layer that delegates to them systematically:
@@ -143,11 +143,13 @@ For a guaranteed clean rebuild: `make build` (PHONY, cleans `dist/` first).
 
 Most low-level benchmark scripts load the published Node bundle from `dist/es/`
 so they measure the public package surface. Their Makefile targets run a clean
-`make build` first. `tsx` remains appropriate for ad-hoc probes that import
-TypeScript internals from `src/`; those probes are diagnostics, not the primary
-baseline source. A few probes are hybrid (`dist/es` for the public constructor,
-`src/` for internals), so their Makefile targets also rebuild first. For direct
-invocation of scripts that import `dist/es/`, use the same contract:
+`make build` first. `tsx` remains appropriate for ad-hoc probes that need source
+internals, but those probes must import them through
+`benchmarks/harness/frozenSourceInternals.ts`; they are diagnostics, not the
+primary baseline source. A few probes are hybrid (`dist/es` for the public
+constructor, harnessed `src/` internals for decomposition), so their Makefile
+targets also rebuild first. For direct invocation of scripts that import
+`dist/es/`, use the same contract:
 
 ```bash
 pnpm build

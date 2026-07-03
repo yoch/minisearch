@@ -13,7 +13,7 @@ import {
 import {
   frozenFromMiniSearchSnapshot,
   parseSnapshotIndex,
-} from '../../src/internal/frozenInternals.ts'
+} from '../harness/frozenSourceInternals.ts'
 import { packTermsFromList } from '../../src/PackedRadixTree/packTermList.ts'
 import { validateFrozenTermIndexLeaves } from '../../src/frozenTermIndex.ts'
 import SearchableMap, { packSearchableMap } from '../../testSupport/upstreamSearchableMap.js'

@@ -20,7 +20,7 @@ import {
   finalizeRaw,
   frozenPostings,
   frozenTermIndex,
-} from '../harness/frozenPipelineHarness.ts'
+} from '../harness/frozenSourceInternals.ts'
 
 function argValue(name) {
   for (let i = 0; i < process.argv.length; i++) {

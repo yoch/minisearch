@@ -1,6 +1,6 @@
 import type FrozenMiniSearchCore from '../FrozenMiniSearchCore'
 import { materializeFrozenAssembleParams, type FrozenMiniSearchCtor } from '../FrozenMiniSearchCore'
-import { buildFrozenAssembleParamsFromMiniSearchSnapshot, type MiniSearchSnapshot, parseSnapshotIndex } from '../fromMiniSearch'
+import { buildFrozenAssembleParamsFromMiniSearchSnapshot, type MiniSearchSnapshot } from '../fromMiniSearch'
 import { type FrozenTermIndex } from '../frozenTermIndex'
 import type { IdToShortIdLookup } from '../frozenIdLookup'
 import {
@@ -24,8 +24,6 @@ import {
   type QueryEngineParams,
 } from '../queryEngine'
 import type { QueryEngineRunOptions } from '../queryEngineGateLimits'
-
-export { parseSnapshotIndex }
 
 type FrozenInternalView<T = any> = {
   _options: OptionsWithDefaults<T>
@@ -200,12 +198,4 @@ export function searchWithRunOptions<T>(
     docId => view._externalIds[docId],
     docId => readStoredFields(view._storedFields, docId),
   )
-}
-
-export function searchNaive<T>(
-  frozen: FrozenMiniSearchCore<T>,
-  query: Query,
-  searchOptions: SearchOptions = {},
-) {
-  return searchWithRunOptions(frozen, query, searchOptions, { disableGating: true })
 }

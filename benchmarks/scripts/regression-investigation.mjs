@@ -12,7 +12,7 @@ import FrozenMiniSearch from '../../dist/es/index.js'
 import {
   frozenFromMiniSearch,
   frozenMemoryBreakdown,
-} from '../../src/internal/frozenInternals.ts'
+} from '../harness/frozenSourceInternals.ts'
 import {
   highFrequencyTerms,
   overflowFrequencies,
