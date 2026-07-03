@@ -14,6 +14,28 @@ import {
 
 const DEFAULT_CAPACITY = 16
 
+type GrowStats = {
+  growEvents: number
+  bytesCopied: number
+}
+
+let lastGrowStats: GrowStats = { growEvents: 0, bytesCopied: 0 }
+
+/** @internal Freeze benchmark profiler. */
+export function resetIncrementalGrowStats(): void {
+  lastGrowStats = { growEvents: 0, bytesCopied: 0 }
+}
+
+/** @internal Freeze benchmark profiler. */
+export function readIncrementalGrowStats(): GrowStats {
+  return { ...lastGrowStats }
+}
+
+function recordGrow(bytesCopied: number): void {
+  lastGrowStats.growEvents++
+  lastGrowStats.bytesCopied += bytesCopied
+}
+
 type GrowableDocIdArray = Uint16Array | Uint32Array
 type GrowableFreqArray = Uint8Array | Uint16Array
 
@@ -49,6 +71,7 @@ class GrowableUint32Column {
   push(value: number): void {
     if (this._len >= this._buf.length) {
       const grown = new Uint32Array(Math.max(1, this._buf.length * 2))
+      recordGrow(this._buf.byteLength)
       grown.set(this._buf)
       this._buf = grown
     }
@@ -89,12 +112,14 @@ class GrowableDocIdColumn {
     const grown = this._buf instanceof Uint16Array
       ? new Uint16Array(minCapacity)
       : new Uint32Array(minCapacity)
+    recordGrow(this._buf.byteLength)
     grown.set(this._buf)
     this._buf = grown
   }
 
   private promote(): void {
     if (this._buf instanceof Uint32Array) return
+    recordGrow(this._buf.byteLength)
     const promoted = new Uint32Array(this._buf.length)
     promoted.set(this._buf)
     this._buf = promoted
@@ -142,12 +167,14 @@ class GrowableFreqColumn {
     const grown = this._buf instanceof Uint8Array
       ? new Uint8Array(minCapacity)
       : new Uint16Array(minCapacity)
+    recordGrow(this._buf.byteLength)
     grown.set(this._buf)
     this._buf = grown
   }
 
   private promote(): void {
     if (this._buf instanceof Uint16Array) return
+    recordGrow(this._buf.byteLength)
     const promoted = new Uint16Array(this._buf.length)
     promoted.set(this._buf)
     this._buf = promoted

@@ -8,13 +8,15 @@
 import MiniSearch from 'minisearch'
 import FrozenMiniSearch from '../../dist/es/index.js'
 import {
+  accumulateSnapshotIndex,
   buildFrozenAssembleParamsFromMiniSearchSnapshot,
   parseSnapshotIndex,
 } from '../../src/fromMiniSearch.ts'
-import { frozenFromMiniSearchSnapshot } from '../harness/frozenSourceInternals.ts'
+import {
+  frozenAssembleWithCtor,
+  frozenFromMiniSearchSnapshot,
+} from '../harness/frozenSourceInternals.ts'
 import { packTermsFromList } from '../../src/PackedRadixTree/packTermList.ts'
-import { validateFrozenTermIndexLeaves } from '../../src/frozenTermIndex.ts'
-import SearchableMap, { packSearchableMap } from '../../testSupport/upstreamSearchableMap.js'
 import { getScenarioById } from '../scenarioRegistry.mjs'
 import { argValue, intArg, timed } from './cpuBenchUtils.mjs'
 
@@ -49,25 +51,20 @@ function main() {
   const fieldCount = options.fields.length
   const nextId = snapshot.nextId
   const terms = snapshot.index.map(([term]) => term)
+  const params = buildFrozenAssembleParamsFromMiniSearchSnapshot(snapshot, options)
 
   const phases = {
     toJSON: () => ms.toJSON(),
-    parseSnapshotIndex: () => parseSnapshotIndex(snapshot, fieldCount, nextId),
+    accumulateIndex: () => accumulateSnapshotIndex(snapshot, fieldCount, nextId),
     packTermsOnly: () => packTermsFromList(terms),
-    validatePackedTermIndex: () => {
-      const packed = packTermsFromList(terms)
-      validateFrozenTermIndexLeaves(packed, terms.length)
-      return packed
-    },
-    packSearchableMap: () => {
-      const map = SearchableMap.from(terms.map((term, i) => [term, i]))
-      return packSearchableMap(map)
-    },
+    parseSnapshotIndex: () => parseSnapshotIndex(snapshot, fieldCount, nextId),
     finalizePostings: () => {
-      const parsed = parseSnapshotIndex(snapshot, fieldCount, nextId)
+      const parsed = accumulateSnapshotIndex(snapshot, fieldCount, nextId)
       return parsed.accumulator.finalize(parsed.termCount, nextId)
     },
     buildFrozenParams: () => buildFrozenAssembleParamsFromMiniSearchSnapshot(snapshot, options),
+    assembleTrusted: () => frozenAssembleWithCtor(params, true, 'minisearch-json', FrozenMiniSearch),
+    assembleUntrusted: () => frozenAssembleWithCtor(params, false, 'minisearch-json', FrozenMiniSearch),
     freezeImport: () => frozenFromMiniSearchSnapshot(FrozenMiniSearch, snapshot, options),
   }
 
@@ -80,15 +77,24 @@ function main() {
     console.log(`  ${label.padEnd(24)} ${p50.toFixed(3)} ms`)
   }
 
+  const accumulateP50 = timed(phases.accumulateIndex, warmup, iterations).p50
+  const packP50 = timed(phases.packTermsOnly, warmup, iterations).p50
   const parseP50 = timed(phases.parseSnapshotIndex, warmup, iterations).p50
   const finalizeP50 = timed(phases.finalizePostings, warmup, iterations).p50
-  const packP50 = timed(phases.packTermsOnly, warmup, iterations).p50
-  console.log('\nDerived splits:')
-  console.log(`  packTermsOnly                ${packP50.toFixed(3)} ms`)
-  console.log(`  postings (finalize − parse)  ${(finalizeP50 - parseP50).toFixed(3)} ms est.`)
-  console.log(`  snapshot shell (params−finalize) ${(timed(phases.buildFrozenParams, warmup, iterations).p50 - finalizeP50).toFixed(3)} ms est.`)
+  const paramsP50 = timed(phases.buildFrozenParams, warmup, iterations).p50
   const freezeP50 = timed(phases.freezeImport, warmup, iterations).p50
-  console.log(`  parseSnapshotIndex share    ${((parseP50 / freezeP50) * 100).toFixed(1)}% of freezeImport`)
+  const trustedP50 = timed(phases.assembleTrusted, warmup, iterations).p50
+  const untrustedP50 = timed(phases.assembleUntrusted, warmup, iterations).p50
+
+  console.log('\nDerived splits:')
+  console.log(`  accumulate (walk only)       ${accumulateP50.toFixed(3)} ms`)
+  console.log(`  packTermsOnly                ${packP50.toFixed(3)} ms`)
+  console.log(`  parse = accumulate + pack    ${parseP50.toFixed(3)} ms (est ${(accumulateP50 + packP50).toFixed(3)} ms)`)
+  console.log(`  finalizePostings             ${finalizeP50.toFixed(3)} ms`)
+  console.log(`  finalize − accumulate        ${(finalizeP50 - accumulateP50).toFixed(3)} ms est.`)
+  console.log(`  snapshot shell (params−finalize) ${(paramsP50 - finalizeP50).toFixed(3)} ms est.`)
+  console.log(`  assemble validation overhead ${(untrustedP50 - trustedP50).toFixed(3)} ms est.`)
+  console.log(`  parse share of freezeImport  ${((parseP50 / freezeP50) * 100).toFixed(1)}%`)
 }
 
 main()

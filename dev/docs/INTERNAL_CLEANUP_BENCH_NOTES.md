@@ -154,3 +154,135 @@ ed37568 Add frozen postings doc id collection tests.
 Captures archivées localement : `benchmarks/baselines/latest-step0.json` … `latest-step5.json` (gitignored).
 
 ---
+
+## Session optimisation freeze — `acdefc9` (2026-07-03)
+
+**Objectif** : optimiser `parseSnapshotIndex` / shell freeze sans régression compatibilité.  
+**Harness** : `benchmarks/scripts/freeze-ab-compare.mjs` (`--mode=baseline|paired|compare`), `profile-freeze.mjs`, `capture-freeze-compare.mjs`.
+
+### Baseline step0 (15 runs, ordre séquentiel)
+
+| Scénario | Médiane freeze |
+|----------|----------------|
+| extreme-giantVocabulary | 343.85 ms |
+| denseNumericIds-100k | 714.95 ms |
+| docIdUint16Boundary-65536 | 527.85 ms |
+
+Capture : `benchmarks/baselines/latest-freeze-step0.json`.
+
+### Profil hotspot (step0, 25 iter)
+
+| Scénario | parseSnapshotIndex | freezeImport | part parse |
+|----------|-------------------|--------------|------------|
+| giant | 160 ms | 245 ms | 78.6 % |
+| dense | 504 ms | 709 ms | 78.6 % (shell ~165 ms) |
+| docId65536 | 239 ms | 286 ms | 74.7 % |
+
+**Conclusion profil** : `parseSnapshotIndex` domine ; shell `fieldLength` visible sur dense mais secondaire vs parse.
+
+### Piste A — présizing accumulateur (`estimateSnapshotPostingCount`)
+
+Pré-scan `Object.keys` sur l’index pour passer `estimatedTotalPostings` à `IncrementalPostingsAccumulator`.
+
+| Mesure | giant | dense | docId |
+|--------|-------|-------|-------|
+| A/B apparié 15 runs (traitement vs `.worktrees/freeze-control`) | **+18.3 %** | **+24.4 %** | **+25.1 %** |
+
+Capture : `benchmarks/baselines/latest-freeze-capacity-paired.json`.
+
+**Verdict piste A** : **NOT VERIFIED** — le pré-scan coûte plus que les réallocations évitées ; régression nette en paired.
+
+### Piste B — shell `fieldLength` via `activeShortIds`
+
+Itération sur `activeShortIds` + passe validation clés orphelines (messages d’erreur inchangés).
+
+| Mesure | giant | dense | docId |
+|--------|-------|-------|-------|
+| A/B apparié 15 runs | −0.0 % | +0.4 % | −3.2 % |
+
+Capture : `benchmarks/baselines/latest-freeze-shell-paired.json`.
+
+**Verdict piste B** : **NOT VERIFIED** — neutre ; pas de gain ≥5 % sur deux scénarios.
+
+### Validation finale
+
+- `capture-freeze-compare.mjs --runs=7` : OK (pas de contradiction harness migrate).
+- Tests : `fromMiniSearch.test.js`, `incrementalPostings.test.js` — 65/65 OK.
+- **Aucun changement code retenu** (revert `fromMiniSearch.ts`).
+
+### Verdict session
+
+**NOT VERIFIED** — aucune piste ne satisfait les critères d’acceptation (≥8–10 % sur un scénario majeur ou ≥5 % sur deux, sans régression >5 %).
+
+**Pistes reportées** (hors scope mesuré ici) : fast path `trustedSource`, fusion passes shell `documentIds`/`storedFields`, réduction allocations dans la triple boucle term/field/docId sans affaiblir validations `fromJSON`.
+
+---
+
+## Session optimisation freeze 2 — `acdefc9` (2026-07-03)
+
+**Politique** : validation relaxée (sûreté minimale hostiles, contrat MiniSearch courant sur le hot path).
+
+**Changements retenus** :
+- `parseIntegerKeyFast` + `readPostingFrequency` sur la triple boucle index.
+- Séparation `accumulateSnapshotIndexV1` / `V2` (plus de test `serializationVersion` par field en v2).
+- Suppression checks producteur chauds : `seenTerms`, `assertRecord` par terme/field, messages contextuels détaillés.
+- Harness `freeze-ab-compare.mjs` : deltas pairés par run, défaut contrôle `.worktrees/freeze-control`.
+- `profile-freeze.mjs` : sous-phases `accumulateIndex`, `assembleTrusted/Untrusted`.
+- `profile-accumulator-growth.mjs` : instrumentation realloc colonnes growables.
+
+### Harness A/A (15 runs, même commit)
+
+| Scénario | Δ médian paired |
+|----------|-----------------|
+| giant | +4.2 % |
+| dense | +3.1 % |
+| docId | +3.8 % |
+
+Bruit harness ~3–4 % ; acceptable pour expérimentation.
+
+### A/B apparié optimisé vs contrôle (15 runs × 2 captures)
+
+| Scénario | Δ médian run 1 | Δ médian run 2 |
+|----------|----------------|----------------|
+| giant | **−14.3 %** (−40 ms) | **−15.6 %** |
+| dense | **−20.7 %** (−110 ms) | **−21.9 %** |
+| docId | **−18.1 %** (−67 ms) | **−14.1 %** |
+
+Captures : `latest-freeze2-paired.json`, `latest-freeze2-paired-confirm.json`.
+
+### Profil post-optim (p50, 25 iter)
+
+| Scénario | accumulate | packTerms | freezeImport | part accumulate+pack |
+|----------|------------|-----------|--------------|----------------------|
+| giant | ~82 ms | ~51 ms | ~195 ms | ~81 % |
+| dense | ~146 ms | ~84 ms | ~331 ms | ~71 % |
+| docId | ~95 ms | ~58 ms | ~212 ms | ~70 % |
+
+Gain concentré dans `accumulateIndex` (walk parse relaxé).
+
+### Accumulateur — croissance sans pré-scan
+
+| Scénario | postings | growEvents | bytesCopied/posting |
+|----------|----------|------------|---------------------|
+| giant | 200k | 42 | 9.2 |
+| dense | 300k | 46 | 15.7 |
+| docId | 262k | 42 | 7.0 |
+
+**Verdict accumulateur** : copies non négligeables mais pré-scan rejeté en session 1 ; pas de prototype chunked retenu.
+
+### Plafond trusted assemble
+
+Overhead validation `assembleUntrusted − assembleTrusted` : **~1.4–2.7 ms** seulement. Le gain ne vient pas du trusted assemble.
+
+### Validation
+
+- `capture-freeze-compare.mjs --runs=7` : OK
+- Tests : `fromMiniSearch`, `incrementalPostings`, `toMiniSearch`, `indexing-parity` — OK
+- `make lint` : OK
+- Tests hostiles index : messages assouplis (politique documentée)
+
+### Verdict session 2
+
+**VERIFIED** — gain reproductible ≥14 % sur les trois scénarios majeurs, confirmé en double capture paired, gain visible dans `accumulateIndex`, parité et layouts stables.
+
+---

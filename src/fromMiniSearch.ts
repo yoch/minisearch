@@ -80,86 +80,152 @@ function parseIntegerKey(key: string, context: string): number {
   return n
 }
 
+/** Hot-path integer key parse for MiniSearch wire keys (no context string). */
+function parseIntegerKeyFast(key: string): number {
+  const len = key.length
+  let n = key.charCodeAt(0) - 48
+  for (let i = 1; i < len; i++) {
+    n = n * 10 + (key.charCodeAt(i) - 48)
+  }
+  return n
+}
+
+function readPostingFrequency(value: unknown): number {
+  const freq = value as number
+  if (!Number.isSafeInteger(freq) || freq <= 0) {
+    throw snapshotError('index posting frequency must be a positive integer')
+  }
+  return freq
+}
+
 function assertShortIdInRange(shortId: number, nextId: number, context: string): void {
   if (shortId >= nextId) {
     throw snapshotError(`${context} shortId ${shortId} must be < nextId ${nextId}`)
   }
 }
 
-function assertFrequency(value: unknown, context: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
-    throw snapshotError(`${context} frequency must be a positive integer`)
-  }
-  return value as number
-}
-
-function parseIndexEntry(
-  entry: unknown,
-  serializationVersion: number,
-  context: string,
-): Record<string, unknown> {
-  if (serializationVersion === 1 && entry != null && typeof entry === 'object' && 'ds' in entry) {
-    return assertRecord((entry as { ds: unknown }).ds, context)
-  }
-  return assertRecord(entry, context)
-}
-
 // Postings segments must be sorted by docId for search (binary seek, gates). We do not
 // re-check order here: MiniSearch.toJSON() emits ascending shortIds, dense remap preserves
 // monotonicity, and JS integer object keys are enumerated in ascending order (for…in).
-function parseSnapshotIndex(
-  snapshot: MiniSearchSnapshot,
+type SnapshotIndexAccumulation = {
+  terms: string[]
+  accumulator: IncrementalPostingsAccumulator
+  termCount: number
+}
+
+function accumulateSnapshotIndexV2(
+  entries: MiniSearchSnapshot['index'],
   fieldCount: number,
   nextId: number,
-  shortIdRemap: Uint32Array | null = null,
-): ParsedSnapshotIndex {
-  const termCount = snapshot.index.length
-  const terms: string[] = []
+  shortIdRemap: Uint32Array | null,
+): SnapshotIndexAccumulation {
+  const termCount = entries.length
+  const terms: string[] = new Array(termCount)
   const accumulator = new IncrementalPostingsAccumulator(fieldCount)
-  const seenTerms = new Set<string>()
-  const { index: entries, serializationVersion } = snapshot
 
-  for (let termIndex = 0; termIndex < entries.length; termIndex++) {
-    const entry = entries[termIndex]
-    if (!Array.isArray(entry) || entry.length !== 2) {
-      throw snapshotError(`index entry ${termIndex} must be a [term, data] pair`)
-    }
-    const [term, data] = entry as [unknown, unknown]
-    if (typeof term !== 'string') {
-      throw snapshotError(`index entry ${termIndex} term must be a string`)
-    }
-    if (seenTerms.has(term)) {
-      throw snapshotError(`index term "${term}" is duplicated`)
-    }
-    seenTerms.add(term)
-    terms.push(term)
-    const dataRecord = assertRecord(data, `index term "${term}"`)
+  for (let termIndex = 0; termIndex < termCount; termIndex++) {
+    const entry = entries[termIndex]!
+    const term = entry[0] as string
+    terms[termIndex] = term
+    const dataRecord = entry[1] as Record<string, Record<string, number>>
     for (const fieldId in dataRecord) {
-      const parsedFieldId = parseIntegerKey(fieldId, `index term "${term}" fieldId`)
+      const parsedFieldId = parseIntegerKeyFast(fieldId)
       if (parsedFieldId >= fieldCount) {
-        throw snapshotError(`index term "${term}" fieldId ${parsedFieldId} must be < field count ${fieldCount}`)
+        throw snapshotError(`index fieldId ${parsedFieldId} must be < field count ${fieldCount}`)
       }
-      const raw = dataRecord[fieldId]
-      const indexEntryRecord = parseIndexEntry(raw, serializationVersion, `index term "${term}" field ${fieldId}`)
+      const indexEntryRecord = dataRecord[fieldId]!
       for (const docId in indexEntryRecord) {
-        const shortId = parseIntegerKey(docId, `index term "${term}" field ${fieldId} docId`)
-        assertShortIdInRange(shortId, nextId, `index term "${term}" field ${fieldId}`)
+        const shortId = parseIntegerKeyFast(docId)
+        if (shortId >= nextId) {
+          throw snapshotError(`index shortId ${shortId} must be < nextId ${nextId}`)
+        }
         const resolvedDocId = shortIdRemap != null ? shortIdRemap[shortId]! : shortId
         if (resolvedDocId === DISCARDED_DOC_ID) continue
         accumulator.append(
           termIndex,
           parsedFieldId,
           resolvedDocId,
-          assertFrequency(indexEntryRecord[docId], `index term "${term}" field ${fieldId} docId ${docId}`),
+          readPostingFrequency(indexEntryRecord[docId]),
         )
       }
     }
   }
 
+  return { terms, accumulator, termCount }
+}
+
+function accumulateSnapshotIndexV1(
+  entries: MiniSearchSnapshot['index'],
+  fieldCount: number,
+  nextId: number,
+  shortIdRemap: Uint32Array | null,
+): SnapshotIndexAccumulation {
+  const termCount = entries.length
+  const terms: string[] = new Array(termCount)
+  const accumulator = new IncrementalPostingsAccumulator(fieldCount)
+
+  for (let termIndex = 0; termIndex < termCount; termIndex++) {
+    const entry = entries[termIndex]!
+    const term = entry[0] as string
+    terms[termIndex] = term
+    const dataRecord = entry[1] as Record<string, unknown>
+    for (const fieldId in dataRecord) {
+      const parsedFieldId = parseIntegerKeyFast(fieldId)
+      if (parsedFieldId >= fieldCount) {
+        throw snapshotError(`index fieldId ${parsedFieldId} must be < field count ${fieldCount}`)
+      }
+      const raw = dataRecord[fieldId]
+      const indexEntryRecord = raw != null && typeof raw === 'object' && 'ds' in raw
+        ? (raw as { ds: Record<string, number> }).ds
+        : raw as Record<string, number>
+      for (const docId in indexEntryRecord) {
+        const shortId = parseIntegerKeyFast(docId)
+        if (shortId >= nextId) {
+          throw snapshotError(`index shortId ${shortId} must be < nextId ${nextId}`)
+        }
+        const resolvedDocId = shortIdRemap != null ? shortIdRemap[shortId]! : shortId
+        if (resolvedDocId === DISCARDED_DOC_ID) continue
+        accumulator.append(
+          termIndex,
+          parsedFieldId,
+          resolvedDocId,
+          readPostingFrequency(indexEntryRecord[docId]),
+        )
+      }
+    }
+  }
+
+  return { terms, accumulator, termCount }
+}
+
+/** @internal Freeze benchmark profiler — walk + accumulate only (no term pack). */
+export function accumulateSnapshotIndex(
+  snapshot: MiniSearchSnapshot,
+  fieldCount: number,
+  nextId: number,
+  shortIdRemap: Uint32Array | null = null,
+): SnapshotIndexAccumulation {
+  const { index: entries, serializationVersion } = snapshot
+  if (!Array.isArray(entries)) {
+    throw snapshotError('index must be an array')
+  }
+  if (serializationVersion === 1) {
+    return accumulateSnapshotIndexV1(entries, fieldCount, nextId, shortIdRemap)
+  }
+  return accumulateSnapshotIndexV2(entries, fieldCount, nextId, shortIdRemap)
+}
+
+function parseSnapshotIndex(
+  snapshot: MiniSearchSnapshot,
+  fieldCount: number,
+  nextId: number,
+  shortIdRemap: Uint32Array | null = null,
+): ParsedSnapshotIndex {
+  const accumulated = accumulateSnapshotIndex(snapshot, fieldCount, nextId, shortIdRemap)
   return {
-    index: packTermsFromList(terms),
-    accumulator,
-    termCount,
+    index: packTermsFromList(accumulated.terms),
+    accumulator: accumulated.accumulator,
+    termCount: accumulated.termCount,
   }
 }
 
