@@ -9,7 +9,3 @@ export {
   parseSnapshotIndex,
   type SnapshotIndexAccumulation,
 } from '../../src/freezeSnapshotIndex'
-export {
-  readIncrementalGrowStats,
-  resetIncrementalGrowStats,
-} from '../../src/internal/incrementalGrowProfiler'

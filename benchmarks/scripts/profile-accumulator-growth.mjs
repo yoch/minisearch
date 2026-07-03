@@ -6,11 +6,10 @@
 import MiniSearch from 'minisearch'
 import {
   accumulateSnapshotIndex,
-  readIncrementalGrowStats,
-  resetIncrementalGrowStats,
 } from '../harness/freezeImportProfiler.ts'
 import { getScenarioById } from '../scenarioRegistry.mjs'
 import { argValue } from './cpuBenchUtils.mjs'
+import { simulateColumnGrowth } from '../../testSupport/growableColumnGrowth.js'
 
 const SCENARIOS = {
   dense: 'denseNumericIds-100k',
@@ -26,10 +25,16 @@ const ms = new MiniSearch(options)
 ms.addAll(corpus)
 const snapshot = ms.toJSON()
 
-resetIncrementalGrowStats()
 const accumulated = accumulateSnapshotIndex(snapshot, options.fields.length, snapshot.nextId)
-const stats = readIncrementalGrowStats()
 const postings = accumulated.accumulator.totalPostings
+const docIdBytes = snapshot.nextId <= 0xffff ? 2 : 4
+const freqBytes = accumulated.accumulator.maxFreq <= 0xff ? 1 : 2
+const stats = [docIdBytes, freqBytes, 4]
+  .map(bytes => simulateColumnGrowth(postings, bytes))
+  .reduce((total, column) => ({
+    growEvents: total.growEvents + column.growEvents,
+    bytesCopied: total.bytesCopied + column.bytesCopied,
+  }), { growEvents: 0, bytesCopied: 0 })
 
 console.log(`Accumulator growth — ${scenario.name}`)
 console.log(`  postings: ${postings}`)

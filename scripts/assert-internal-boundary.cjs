@@ -121,7 +121,7 @@ pushImportViolations(benchmarkFiles, [
     pattern: new RegExp(`${importPrefix}['"][^'"]*src/internal/frozenInternals(?:\\.[jt]s)?['"]`, 'g'),
   },
   {
-    label: 'benchmark grow profiler import outside freezeImportProfiler harness',
+    label: 'benchmark direct import of src/incrementalPostings',
     pattern: new RegExp(`${importPrefix}['"][^'"]*src/incrementalPostings(?:\\.[jt]s)?['"]`, 'g'),
   },
 ])

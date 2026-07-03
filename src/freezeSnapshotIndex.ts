@@ -22,12 +22,29 @@ function snapshotIndexError(detail: string): Error {
   return new Error(`FrozenMiniSearch: invalid MiniSearch snapshot: ${detail}`)
 }
 
-/** Hot-path integer key parse for MiniSearch wire keys (no context string). */
-function parseIntegerKeyFast(key: string): number {
+/** Hot-path canonical integer key parse for MiniSearch wire keys. */
+function parseIndexIntegerKey(key: string, label: 'fieldId' | 'shortId'): number {
   const len = key.length
-  let n = key.charCodeAt(0) - 48
+  if (len === 0) {
+    throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
+  }
+
+  const c0 = key.charCodeAt(0)
+  if (c0 < 48 || c0 > 57 || (c0 === 48 && len > 1)) {
+    throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
+  }
+
+  let n = c0 - 48
   for (let i = 1; i < len; i++) {
-    n = n * 10 + (key.charCodeAt(i) - 48)
+    const c = key.charCodeAt(i)
+    if (c < 48 || c > 57) {
+      throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
+    }
+    n = n * 10 + (c - 48)
+  }
+
+  if (!Number.isSafeInteger(n)) {
+    throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
   }
   return n
 }
@@ -68,11 +85,11 @@ function accumulateSnapshotIndexV2(
     terms[termIndex] = term
     const dataRecord = entry[1] as Record<string, Record<string, number>>
     for (const fieldId in dataRecord) {
-      const parsedFieldId = parseIntegerKeyFast(fieldId)
+      const parsedFieldId = parseIndexIntegerKey(fieldId, 'fieldId')
       assertIndexFieldId(parsedFieldId, fieldCount)
       const indexEntryRecord = dataRecord[fieldId]!
       for (const docId in indexEntryRecord) {
-        const shortId = parseIntegerKeyFast(docId)
+        const shortId = parseIndexIntegerKey(docId, 'shortId')
         assertIndexShortId(shortId, nextId)
         const resolvedDocId = shortIdRemap != null ? shortIdRemap[shortId]! : shortId
         if (resolvedDocId === DISCARDED_DOC_ID) continue
@@ -105,14 +122,14 @@ function accumulateSnapshotIndexV1(
     terms[termIndex] = term
     const dataRecord = entry[1] as Record<string, unknown>
     for (const fieldId in dataRecord) {
-      const parsedFieldId = parseIntegerKeyFast(fieldId)
+      const parsedFieldId = parseIndexIntegerKey(fieldId, 'fieldId')
       assertIndexFieldId(parsedFieldId, fieldCount)
       const raw = dataRecord[fieldId]
       const indexEntryRecord = raw != null && typeof raw === 'object' && 'ds' in raw
         ? (raw as { ds: Record<string, number> }).ds
         : raw as Record<string, number>
       for (const docId in indexEntryRecord) {
-        const shortId = parseIntegerKeyFast(docId)
+        const shortId = parseIndexIntegerKey(docId, 'shortId')
         assertIndexShortId(shortId, nextId)
         const resolvedDocId = shortIdRemap != null ? shortIdRemap[shortId]! : shortId
         if (resolvedDocId === DISCARDED_DOC_ID) continue

@@ -193,6 +193,30 @@ describe('fromMiniSearch loaders', () => {
       .toThrow(/invalid MiniSearch snapshot: index fieldId 9 must be < field count 1/)
   })
 
+  test('fromJSON rejects malformed index fieldId keys even when they parse in range', () => {
+    const snapshot = validSnapshot({
+      fieldIds: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`f${i}`, i])),
+      fieldLength: { 0: Array.from({ length: 12 }, () => 1) },
+      averageFieldLength: Array.from({ length: 12 }, () => 1),
+      index: [['hello', { ':': { 0: 1 } }]],
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), {
+      fields: Array.from({ length: 12 }, (_, i) => `f${i}`),
+    })).toThrow(/invalid MiniSearch snapshot: index fieldId key ":" must be a non-negative integer/)
+  })
+
+  test('fromJSON rejects malformed index docId keys even when they parse in range', () => {
+    const snapshot = validSnapshot({
+      documentCount: 11,
+      nextId: 11,
+      documentIds: Object.fromEntries(Array.from({ length: 11 }, (_, i) => [i, `doc-${i}`])),
+      fieldLength: Object.fromEntries(Array.from({ length: 11 }, (_, i) => [i, [1]])),
+      index: [['hello', { 0: { ':': 1 } }]],
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] }))
+      .toThrow(/invalid MiniSearch snapshot: index shortId key ":" must be a non-negative integer/)
+  })
+
   test('fromJSON rejects malformed index entries', () => {
     const snapshot = validSnapshot({
       index: ['hello'],
