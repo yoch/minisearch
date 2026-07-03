@@ -111,7 +111,7 @@ export const calcBM25Score = (
   termFreq, matchingCount, totalCount, fieldLength, bm25FieldConstants(bm25params, avgFieldLength),
 )
 
-export const getOwnProperty = (object: Record<string, unknown>, property: string): unknown =>
+const getOwnProperty = (object: Record<string, unknown>, property: string): unknown =>
   Object.prototype.hasOwnProperty.call(object, property) ? object[property] : undefined
 
 /** Field boosts for one query spec; `names` is computed once from `boosts`. */
@@ -132,11 +132,11 @@ export function fieldBoostsForQuery(
   return { names: Object.keys(boosts), boosts }
 }
 
-export const assignUniqueTerm = (target: string[], term: string): void => {
+const assignUniqueTerm = (target: string[], term: string): void => {
   if (!target.includes(term)) target.push(term)
 }
 
-export const assignUniqueTerms = (target: string[], source: readonly string[]): void => {
+const assignUniqueTerms = (target: string[], source: readonly string[]): void => {
   for (const term of source) {
     if (!target.includes(term)) target.push(term)
   }
