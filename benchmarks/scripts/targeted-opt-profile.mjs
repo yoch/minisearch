@@ -15,6 +15,7 @@ import { performance } from 'node:perf_hooks'
 import { buildBenchmarkScenarios, runScenario } from '../benchmarkSuite.js'
 import { runHeapSuite, mergeHeapIntoScenarios } from '../framework/runHeapSuite.mjs'
 import { collectRunMetadata } from '../benchmarkUtils.js'
+import { argValue, boolArg, intArg, listArg, median } from './cpuBenchUtils.mjs'
 
 const DEFAULT_SCENARIOS = [
   'extreme-giantVocabulary',
@@ -23,34 +24,6 @@ const DEFAULT_SCENARIOS = [
   'divina-indexOnly',
   'divina-storeFields',
 ]
-
-function argValue(name) {
-  const flag = `--${name}`
-  for (let i = 0; i < process.argv.length; i++) {
-    const arg = process.argv[i]
-    if (arg === flag) return process.argv[i + 1]
-    if (arg.startsWith(`${flag}=`)) return arg.slice(flag.length + 1)
-  }
-  return undefined
-}
-
-function listArg(name, fallback) {
-  const raw = argValue(name)
-  if (raw == null || raw.trim() === '') return fallback
-  return raw.split(',').map(s => s.trim()).filter(Boolean)
-}
-
-function intArg(name, fallback) {
-  const raw = argValue(name)
-  const value = raw == null ? NaN : Number(raw)
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
-}
-
-function boolArg(name, fallback = false) {
-  const raw = argValue(name)
-  if (raw == null) return process.argv.includes(`--${name}`) || fallback
-  return raw !== '0' && raw !== 'false'
-}
 
 function scenarioMap() {
   return new Map(buildBenchmarkScenarios().map(s => [s.id, s]))
@@ -63,14 +36,6 @@ function pickScenarios(ids) {
     if (scenario == null) throw new Error(`Unknown scenario: ${id}`)
     return scenario
   })
-}
-
-function median(nums) {
-  const sorted = [...nums].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid]
 }
 
 function aggregateRuns(results) {
@@ -158,9 +123,9 @@ function summarizeScenario(result) {
   return summary
 }
 
-const out = argValue('out') ?? '/tmp/minisearch-opt-profile.json'
-const eventFile = argValue('events') ?? `${out}.events.ndjson`
-const partialOut = argValue('partial') ?? `${out}.partial.json`
+const out = argValue('--out') ?? '/tmp/minisearch-opt-profile.json'
+const eventFile = argValue('--events') ?? `${out}.events.ndjson`
+const partialOut = argValue('--partial') ?? `${out}.partial.json`
 const scenarioIds = listArg('scenarios', DEFAULT_SCENARIOS)
 const surfaces = listArg('surfaces', ['search', 'search-levels', 'build', 'load'])
 const runs = intArg('runs', 1)

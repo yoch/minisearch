@@ -10,6 +10,18 @@ export function intArg(name, fallback, { min = 1 } = {}) {
   return Number.isFinite(value) && value >= min ? Math.floor(value) : fallback
 }
 
+export function listArg(name, fallback) {
+  const raw = argValue(`--${name}`)
+  if (raw == null || raw.trim() === '') return fallback
+  return raw.split(',').map(s => s.trim()).filter(Boolean)
+}
+
+export function boolArg(name, fallback = false) {
+  const raw = argValue(`--${name}`)
+  if (raw == null) return process.argv.includes(`--${name}`) || fallback
+  return raw !== '0' && raw !== 'false'
+}
+
 export function p95(nums) {
   const sorted = [...nums].sort((a, b) => a - b)
   const idx = Math.ceil(sorted.length * 0.95) - 1
