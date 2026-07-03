@@ -283,11 +283,7 @@ function collectDocIdsForQueryInternal(
 
   if (isQueryCombination(query)) {
     const options = { ...searchOptions, ...query, queries: undefined }
-    const operator = (
-      query.combineWith
-      ?? options.combineWith
-      ?? params.globalSearchOptions.combineWith
-    ) as CombinationOperator
+    const operator = (options.combineWith ?? params.globalSearchOptions.combineWith) as CombinationOperator
     return collectCombinedDocIds(
       query.queries,
       operator,
@@ -348,11 +344,7 @@ function executeQueryInternal(
   if (isQueryCombination(query)) {
     // Spread inherits parent combineWith into child branches (MiniSearch 7.2 behavior).
     const options = { ...searchOptions, ...query, queries: undefined }
-    const operator = (
-      query.combineWith
-      ?? options.combineWith
-      ?? params.globalSearchOptions.combineWith
-    ) as CombinationOperator
+    const operator = (options.combineWith ?? params.globalSearchOptions.combineWith) as CombinationOperator
 
     if (useGatedEvaluation(run, query.queries.length, operator, combinationHasWildcard(query))) {
       return executeCombinedBranches(
