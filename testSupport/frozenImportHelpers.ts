@@ -1,5 +1,5 @@
 import type FrozenMiniSearchCore from '../src/FrozenMiniSearchCore'
-import { materializeFrozenAssembleParams, type FrozenMiniSearchCtor } from '../src/FrozenMiniSearchCore'
+import { assembleFrozenInternal, type FrozenMiniSearchCtor } from '../src/FrozenMiniSearchCore'
 import { buildFrozenAssembleParamsFromMiniSearchSnapshot, type MiniSearchSnapshot } from '../src/fromMiniSearch'
 import type { FrozenAssembleParams } from '../src/frozenTypes'
 import type { SnapshotOwnershipMode } from '../src/frozenOwnedSnapshot'
@@ -12,7 +12,7 @@ export function frozenAssembleWithCtor<T, I extends FrozenMiniSearchCore<T>>(
   ownershipMode: SnapshotOwnershipMode,
   Ctor: FrozenMiniSearchCtor<T, I>,
 ): I {
-  return new Ctor(materializeFrozenAssembleParams(params, trustedSource, ownershipMode))
+  return assembleFrozenInternal(params, trustedSource, ownershipMode, Ctor)
 }
 
 /** Test/benchmark-only import path from a pre-parsed MiniSearch snapshot. */

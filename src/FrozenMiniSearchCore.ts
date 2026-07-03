@@ -75,18 +75,19 @@ export function materializeFrozenAssembleParams<T>(
   return owned
 }
 
-function assembleFrozenInternal<T>(
+/** @internal Shared trusted/untrusted assembly entry for product and test harnesses. */
+export function assembleFrozenInternal<T>(
   params: FrozenAssembleParams<T>,
   trustedSource: boolean,
   ownershipMode: SnapshotOwnershipMode,
 ): FrozenMiniSearchCore<T>
-function assembleFrozenInternal<T, I extends FrozenMiniSearchCore<T>>(
+export function assembleFrozenInternal<T, I extends FrozenMiniSearchCore<T>>(
   params: FrozenAssembleParams<T>,
   trustedSource: boolean,
   ownershipMode: SnapshotOwnershipMode,
   Ctor: FrozenMiniSearchCtor<T, I>,
 ): I
-function assembleFrozenInternal<T, I extends FrozenMiniSearchCore<T>>(
+export function assembleFrozenInternal<T, I extends FrozenMiniSearchCore<T>>(
   params: FrozenAssembleParams<T>,
   trustedSource: boolean,
   ownershipMode: SnapshotOwnershipMode,
