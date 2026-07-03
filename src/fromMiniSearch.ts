@@ -52,9 +52,8 @@ function assertNonNegativeInteger(value: unknown, context: string): number {
   return value as number
 }
 
-// Hot path (one call per posting docId): validate a canonical non-negative
-// integer key with an allocation-free digit scan instead of a regex.
-// Equivalent to /^(0|[1-9]\d*)$/ + Number.isSafeInteger.
+// Import path: validate a canonical non-negative integer key with an allocation-free
+// digit scan instead of a regex.
 function parseIntegerKey(key: string, context: string): number {
   const len = key.length
   let valid = len > 0
@@ -195,6 +194,7 @@ function validateActiveShortIds(
   if (shortIds.length > documentCount) {
     throw snapshotError(`documentIds count ${shortIds.length} must be <= documentCount ${documentCount}`)
   }
+  shortIds.sort((a, b) => a - b)
   return shortIds
 }
 
@@ -271,7 +271,7 @@ export function buildFrozenAssembleParamsFromMiniSearchSnapshot<T>(
     shortIdRemap = new Uint32Array(nextId)
     shortIdRemap.fill(DISCARDED_DOC_ID)
     let dense = 0
-    const sortedShortIds = [...activeShortIds].sort((a, b) => a - b)
+    const sortedShortIds = activeShortIds
     for (const shortId of sortedShortIds) {
       const shortIdStr = String(shortId)
       shortIdRemap[shortId] = dense

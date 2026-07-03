@@ -256,6 +256,17 @@ describe('fromMiniSearch loaders', () => {
       .toThrow(/invalid MiniSearch snapshot: documentCount 2 must be <= nextId 1/)
   })
 
+  test('fromJSON rejects documentIds count greater than documentCount', () => {
+    const snapshot = validSnapshot({
+      documentCount: 1,
+      nextId: 3,
+      documentIds: { 0: 'a', 1: 'b' },
+      fieldLength: { 0: [1], 1: [1] },
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] }))
+      .toThrow(/invalid MiniSearch snapshot: documentIds count 2 must be <= documentCount 1/)
+  })
+
   test('fromJSON rejects duplicate and incomplete fieldIds', () => {
     const dup = validSnapshot({
       fieldIds: { a: 0, b: 0 },
