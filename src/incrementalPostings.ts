@@ -13,6 +13,58 @@ import {
 } from './frozenPostings'
 
 const DEFAULT_CAPACITY = 16
+const GROWTH_FACTOR = 2
+
+/** @internal Growable column sizing policy (production uses {@link GROWTH_FACTOR}). */
+export function nextGrowableCapacity(currentLength: number, growthFactor = GROWTH_FACTOR): number {
+  if (!Number.isFinite(growthFactor) || growthFactor <= 1) {
+    throw new Error(`growable capacity growthFactor must be > 1, got ${growthFactor}`)
+  }
+  return Math.max(1, Math.ceil(currentLength * growthFactor))
+}
+
+export type SimulatedColumnGrowth = {
+  growEvents: number
+  bytesCopied: number
+  peakCapacity: number
+  finalCapacity: number
+  overshoot: number
+}
+
+/**
+ * @internal Simulate repeated push growth for one column (e.g. compare ×2 vs ×1.5).
+ * `elementBytes` is the width of one slot (4 for u32 slotIds, 2 for u16 docIds, etc.).
+ */
+export function simulateColumnGrowth(
+  itemCount: number,
+  elementBytes: number,
+  initialCapacity = DEFAULT_CAPACITY,
+  growthFactor = GROWTH_FACTOR,
+): SimulatedColumnGrowth {
+  let capacity = Math.max(1, initialCapacity)
+  let length = 0
+  let growEvents = 0
+  let bytesCopied = 0
+  let peakCapacity = capacity
+
+  while (length < itemCount) {
+    if (length >= capacity) {
+      bytesCopied += capacity * elementBytes
+      growEvents++
+      capacity = nextGrowableCapacity(capacity, growthFactor)
+      if (capacity > peakCapacity) peakCapacity = capacity
+    }
+    length++
+  }
+
+  return {
+    growEvents,
+    bytesCopied,
+    peakCapacity,
+    finalCapacity: capacity,
+    overshoot: capacity - itemCount,
+  }
+}
 
 type GrowStats = {
   growEvents: number
@@ -70,7 +122,7 @@ class GrowableUint32Column {
 
   push(value: number): void {
     if (this._len >= this._buf.length) {
-      const grown = new Uint32Array(Math.max(1, this._buf.length * 2))
+      const grown = new Uint32Array(nextGrowableCapacity(this._buf.length))
       recordGrow(this._buf.byteLength)
       grown.set(this._buf)
       this._buf = grown
@@ -128,7 +180,7 @@ class GrowableDocIdColumn {
   push(value: number): void {
     if (value > 0xffff) this.promote()
     if (this._len >= this._buf.length) {
-      this.grow(Math.max(1, this._buf.length * 2))
+      this.grow(nextGrowableCapacity(this._buf.length))
     }
     this._buf[this._len++] = value
   }
@@ -184,7 +236,7 @@ class GrowableFreqColumn {
     const v = clampFreq(freq)
     if (v > 0xff) this.promote()
     if (this._len >= this._buf.length) {
-      this.grow(Math.max(1, this._buf.length * 2))
+      this.grow(nextGrowableCapacity(this._buf.length))
     }
     this._buf[this._len++] = v
     return v

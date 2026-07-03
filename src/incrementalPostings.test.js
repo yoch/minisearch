@@ -7,7 +7,7 @@ import { frozenMemoryBreakdown } from '../testSupport/frozenMemoryBreakdown.js'
 import { frozenFromMiniSearch } from '../testSupport/frozenImportHelpers'
 import { createFrozenIndexBuilder } from './frozenBuild'
 import { MAX_FREQ, readDocId } from './compactPostings'
-import { IncrementalPostingsAccumulator } from './incrementalPostings'
+import { IncrementalPostingsAccumulator, nextGrowableCapacity, simulateColumnGrowth } from './incrementalPostings'
 import {
   createFrozenFieldTermFlyweight,
   validateFrozenPostingsLayout,
@@ -287,6 +287,89 @@ describe('IncrementalPostingsAccumulator', () => {
     expect(acc._slotIds._buf.length).toBe(1)
     expect(acc._docIds._buf).toBeInstanceOf(Uint16Array)
     expect(acc._freqs._buf).toBeInstanceOf(Uint8Array)
+  })
+
+  describe('growable capacity expansion policy', () => {
+    const INITIAL_CAPACITY = 16
+
+    test('nextGrowableCapacity doubles by default and supports ×1.5', () => {
+      expect(nextGrowableCapacity(INITIAL_CAPACITY)).toBe(32)
+      expect(nextGrowableCapacity(INITIAL_CAPACITY, 2)).toBe(32)
+      expect(nextGrowableCapacity(INITIAL_CAPACITY, 1.5)).toBe(24)
+    })
+
+    test('production accumulator doubles column capacity on overflow', () => {
+      const acc = new IncrementalPostingsAccumulator(1)
+      for (let i = 0; i < INITIAL_CAPACITY + 1; i++) acc.append(0, 0, i, 1)
+      expect(acc._slotIds._buf.length).toBe(INITIAL_CAPACITY * 2)
+    })
+
+    test('×1.5 vs ×2: trade-offs on representative freeze posting counts', () => {
+      const elementBytes = 4 // u32 slotIds column during freeze import
+
+      const doublingExactPowerOfTwo = simulateColumnGrowth(65_536, elementBytes, INITIAL_CAPACITY, 2)
+      const gentlerExactPowerOfTwo = simulateColumnGrowth(65_536, elementBytes, INITIAL_CAPACITY, 1.5)
+      // Powers of two align with ×2: zero overshoot, tighter peak than gentler steps.
+      expect(doublingExactPowerOfTwo.overshoot).toBe(0)
+      expect(doublingExactPowerOfTwo.peakCapacity).toBe(65_536)
+      expect(gentlerExactPowerOfTwo.peakCapacity).toBeGreaterThan(doublingExactPowerOfTwo.peakCapacity)
+      expect(gentlerExactPowerOfTwo.growEvents).toBeGreaterThan(doublingExactPowerOfTwo.growEvents)
+      expect(gentlerExactPowerOfTwo.bytesCopied).toBeGreaterThan(doublingExactPowerOfTwo.bytesCopied)
+
+      const denseScale = simulateColumnGrowth(300_000, elementBytes, INITIAL_CAPACITY, 2)
+      const denseScaleGentler = simulateColumnGrowth(300_000, elementBytes, INITIAL_CAPACITY, 1.5)
+      // Gain on dense-scale corpora: less final slack and a lower peak buffer.
+      expect(denseScaleGentler.growEvents).toBeGreaterThan(denseScale.growEvents)
+      expect(denseScaleGentler.bytesCopied).toBeGreaterThan(denseScale.bytesCopied)
+      expect(denseScaleGentler.finalCapacity).toBeLessThan(denseScale.finalCapacity)
+      expect(denseScaleGentler.overshoot).toBeLessThan(denseScale.overshoot)
+      expect(denseScaleGentler.peakCapacity).toBeLessThan(denseScale.peakCapacity)
+
+      const awkwardBand = simulateColumnGrowth(200_000, elementBytes, INITIAL_CAPACITY, 2)
+      const awkwardBandGentler = simulateColumnGrowth(200_000, elementBytes, INITIAL_CAPACITY, 1.5)
+      // Loss: between powers of two, gentler steps can overshoot the next ×2 plateau and waste more.
+      expect(awkwardBandGentler.growEvents).toBeGreaterThan(awkwardBand.growEvents)
+      expect(awkwardBandGentler.bytesCopied).toBeGreaterThan(awkwardBand.bytesCopied)
+      expect(awkwardBandGentler.overshoot).toBeGreaterThan(awkwardBand.overshoot)
+      expect(awkwardBandGentler.peakCapacity).toBeGreaterThan(awkwardBand.peakCapacity)
+    })
+
+    test('initial capacity sweep 16/32/64/128 closes DEFAULT_CAPACITY discussion', () => {
+      const elementBytes = 4
+      const sweep = [16, 32, 64, 128]
+
+      for (const postingCount of [200_000, 300_000]) {
+        const stats = sweep.map((initialCapacity) =>
+          simulateColumnGrowth(postingCount, elementBytes, initialCapacity),
+        )
+
+        // Larger hints shave a few grow events but converge to the same final buffer.
+        for (let i = 1; i < stats.length; i++) {
+          expect(stats[i].growEvents).toBeLessThanOrEqual(stats[i - 1].growEvents)
+          expect(stats[i].bytesCopied).toBeLessThanOrEqual(stats[i - 1].bytesCopied)
+          expect(stats[i].finalCapacity).toBe(stats[i - 1].finalCapacity)
+          expect(stats[i].overshoot).toBe(stats[i - 1].overshoot)
+        }
+
+        // Savings at scale are tiny (<0.1 % bytes copied); paired bench showed dense +4.1 % CPU at 128.
+        const baseline = stats[0]
+        const largest = stats[stats.length - 1]
+        expect(largest.bytesCopied).toBeLessThan(baseline.bytesCopied)
+        expect(baseline.bytesCopied - largest.bytesCopied).toBeLessThan(baseline.bytesCopied * 0.001)
+      }
+
+      const smallIndex = sweep.map((initialCapacity) =>
+        simulateColumnGrowth(100, elementBytes, initialCapacity),
+      )
+      // Small snapshots pay upfront for a larger hint: same final size, more reserved from the first push.
+      expect(smallIndex[0].growEvents).toBeGreaterThan(smallIndex[smallIndex.length - 1].growEvents)
+      for (const row of smallIndex) {
+        expect(row.finalCapacity).toBe(128)
+        expect(row.overshoot).toBe(28)
+      }
+      expect(smallIndex[smallIndex.length - 1].bytesCopied).toBe(0)
+      expect(smallIndex[0].bytesCopied).toBeGreaterThan(0)
+    })
   })
 })
 

@@ -169,6 +169,30 @@ describe('fromMiniSearch loaders', () => {
       .toThrow(/invalid MiniSearch snapshot: index shortId 99 must be < nextId 1/)
   })
 
+  test('fromJSON rejects empty posting docId keys in index', () => {
+    const snapshot = validSnapshot({
+      index: [['hello', { 0: { '': 1 } }]],
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] }))
+      .toThrow(/invalid MiniSearch snapshot: index shortId/)
+  })
+
+  test('fromJSON rejects negative posting docId keys in index', () => {
+    const snapshot = validSnapshot({
+      index: [['hello', { 0: { '-1': 1 } }]],
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] }))
+      .toThrow(/invalid MiniSearch snapshot: index shortId/)
+  })
+
+  test('fromJSON rejects index fieldId outside field count', () => {
+    const snapshot = validSnapshot({
+      index: [['hello', { 9: { 0: 1 } }]],
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] }))
+      .toThrow(/invalid MiniSearch snapshot: index fieldId 9 must be < field count 1/)
+  })
+
   test('fromJSON rejects malformed index entries', () => {
     const snapshot = validSnapshot({
       index: ['hello'],

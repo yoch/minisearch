@@ -90,6 +90,18 @@ function parseIntegerKeyFast(key: string): number {
   return n
 }
 
+function assertIndexFieldId(fieldId: number, fieldCount: number): void {
+  if (!Number.isSafeInteger(fieldId) || fieldId < 0 || fieldId >= fieldCount) {
+    throw snapshotError(`index fieldId ${fieldId} must be < field count ${fieldCount}`)
+  }
+}
+
+function assertIndexShortId(shortId: number, nextId: number): void {
+  if (!Number.isSafeInteger(shortId) || shortId < 0 || shortId >= nextId) {
+    throw snapshotError(`index shortId ${shortId} must be < nextId ${nextId}`)
+  }
+}
+
 function readPostingFrequency(value: unknown): number {
   const freq = value as number
   if (!Number.isSafeInteger(freq) || freq <= 0) {
@@ -130,15 +142,11 @@ function accumulateSnapshotIndexV2(
     const dataRecord = entry[1] as Record<string, Record<string, number>>
     for (const fieldId in dataRecord) {
       const parsedFieldId = parseIntegerKeyFast(fieldId)
-      if (parsedFieldId >= fieldCount) {
-        throw snapshotError(`index fieldId ${parsedFieldId} must be < field count ${fieldCount}`)
-      }
+      assertIndexFieldId(parsedFieldId, fieldCount)
       const indexEntryRecord = dataRecord[fieldId]!
       for (const docId in indexEntryRecord) {
         const shortId = parseIntegerKeyFast(docId)
-        if (shortId >= nextId) {
-          throw snapshotError(`index shortId ${shortId} must be < nextId ${nextId}`)
-        }
+        assertIndexShortId(shortId, nextId)
         const resolvedDocId = shortIdRemap != null ? shortIdRemap[shortId]! : shortId
         if (resolvedDocId === DISCARDED_DOC_ID) continue
         accumulator.append(
@@ -171,18 +179,14 @@ function accumulateSnapshotIndexV1(
     const dataRecord = entry[1] as Record<string, unknown>
     for (const fieldId in dataRecord) {
       const parsedFieldId = parseIntegerKeyFast(fieldId)
-      if (parsedFieldId >= fieldCount) {
-        throw snapshotError(`index fieldId ${parsedFieldId} must be < field count ${fieldCount}`)
-      }
+      assertIndexFieldId(parsedFieldId, fieldCount)
       const raw = dataRecord[fieldId]
       const indexEntryRecord = raw != null && typeof raw === 'object' && 'ds' in raw
         ? (raw as { ds: Record<string, number> }).ds
         : raw as Record<string, number>
       for (const docId in indexEntryRecord) {
         const shortId = parseIntegerKeyFast(docId)
-        if (shortId >= nextId) {
-          throw snapshotError(`index shortId ${shortId} must be < nextId ${nextId}`)
-        }
+        assertIndexShortId(shortId, nextId)
         const resolvedDocId = shortIdRemap != null ? shortIdRemap[shortId]! : shortId
         if (resolvedDocId === DISCARDED_DOC_ID) continue
         accumulator.append(
