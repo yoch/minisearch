@@ -99,11 +99,6 @@ function combinationHasWildcard(query: QueryCombination): boolean {
   return query.queries.some(q => isWildcardQuery(q) || (isQueryCombination(q) && combinationHasWildcard(q)))
 }
 
-function isGatedCombinationOperator(operator: CombinationOperator): boolean {
-  const op = operator.toLowerCase()
-  return op === 'and' || op === 'and_not'
-}
-
 function shouldUseGatedEvaluation(
   branchCount: number,
   operator: CombinationOperator,
@@ -111,7 +106,8 @@ function shouldUseGatedEvaluation(
 ): boolean {
   if (hasWildcard) return false
   if (branchCount <= 1) return false
-  return isGatedCombinationOperator(operator)
+  const op = operator.toLowerCase()
+  return op === 'and' || op === 'and_not'
 }
 
 function normalizeStringQuery(
