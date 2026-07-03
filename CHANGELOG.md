@@ -5,6 +5,7 @@
 ### Changed
 
 - **Benchmark internals** — source-based benchmark probes now import FrozenMiniSearch internals through `benchmarks/harness/frozenSourceInternals.ts`, with `assert-internal-boundary.cjs` guarding against new direct `benchmarks/ → src/internal` imports.
+- **Benchmark runner** — simplify `benchmarkUtils.js` / `benchmarkSuite.js` by dropping unused utility exports and centralizing optional-surface aggregation, so partial benchmark surfaces no longer produce empty `diskMb` / `loadMs` payloads.
 
 ### Removed
 

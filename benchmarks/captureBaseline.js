@@ -77,12 +77,12 @@ if (memoryOnly) {
   scenarios = mergeHeapIntoScenarios(cpuStubs, heapSuite)
 } else if (runHeap) {
   console.log(`Benchmark profile: CPU surfaces [${cpuSurfaces.join(', ')}] then isolated heap phase\n`)
-  const cpuScenarios = runBenchmarkSuite(undefined, runs, { benchProfile, surfaces: cpuSurfaces })
+  const cpuScenarios = runBenchmarkSuite(undefined, runs, { surfaces: cpuSurfaces })
   const heapSuite = runHeapSuite({ reference: useReference })
   heapBenchProtocol = heapSuite.heapBenchProtocol
   scenarios = mergeHeapIntoScenarios(cpuScenarios, heapSuite)
 } else {
-  scenarios = runBenchmarkSuite(undefined, runs, { benchProfile, surfaces })
+  scenarios = runBenchmarkSuite(undefined, runs, { surfaces })
 }
 
 const payload = {

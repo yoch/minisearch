@@ -190,6 +190,22 @@ function aggregateScoreDrift (runs) {
   })
 }
 
+function medianMetric (runs, pick, digits) {
+  const values = runs.map(pick).filter((v) => v != null)
+  return values.length ? medianRound(values, digits) : undefined
+}
+
+function medianIntMetric (runs, pick) {
+  const value = medianMetric(runs, pick, 0)
+  return value == null ? undefined : Math.round(value)
+}
+
+function savingPct (base, value) {
+  return base != null && value != null && base > 0
+    ? Number((100 * (1 - value / base)).toFixed(1))
+    : undefined
+}
+
 function aggregateScenarioRuns (runs) {
   const base = runs[0]
   if (base.benchProfile === 'search' || (base.benchSurfaces?.length === 1 && base.benchSurfaces[0] === 'search')) {
@@ -214,60 +230,34 @@ function aggregateScenarioRuns (runs) {
   }
 
   const indexing = {
-    addAllMs: medianRound(runs.map((r) => r.indexing.addAllMs), 2),
-    toJSONMs: medianRound(runs.map((r) => r.indexing.toJSONMs).filter((v) => v != null), 2),
-    freezeMs: medianRound(runs.map((r) => r.indexing.freezeMs).filter((v) => v != null), 2),
-    fromDocumentsMs: medianRound(runs.map((r) => r.indexing.fromDocumentsMs), 2),
-    jsonSerializeMs: medianRound(runs.map((r) => r.indexing.jsonSerializeMs), 2),
-    saveBinaryMs: medianRound(runs.map((r) => r.indexing.saveBinaryMs), 2),
+    addAllMs: medianMetric(runs, (r) => r.indexing.addAllMs, 2),
+    toJSONMs: medianMetric(runs, (r) => r.indexing.toJSONMs, 2),
+    freezeMs: medianMetric(runs, (r) => r.indexing.freezeMs, 2),
+    fromDocumentsMs: medianMetric(runs, (r) => r.indexing.fromDocumentsMs, 2),
+    jsonSerializeMs: medianMetric(runs, (r) => r.indexing.jsonSerializeMs, 2),
+    saveBinaryMs: medianMetric(runs, (r) => r.indexing.saveBinaryMs, 2),
     binaryMagic: base.indexing.binaryMagic
   }
 
-  const heapMutable = base.heapMb
-    ? medianRound(runs.map((r) => r.heapMb?.mutable).filter((v) => v != null), 3)
-    : undefined
-  const heapFrozen = base.heapMb
-    ? medianRound(runs.map((r) => r.heapMb?.frozen).filter((v) => v != null), 3)
-    : undefined
-  const heapMutableTotal = base.heapMb?.mutableTotalResident != null
-    ? medianRound(runs.map((r) => r.heapMb?.mutableTotalResident).filter((v) => v != null), 3)
-    : undefined
-  const heapFrozenTotal = base.heapMb?.frozenTotalResident != null
-    ? medianRound(runs.map((r) => r.heapMb?.frozenTotalResident).filter((v) => v != null), 3)
-    : undefined
-  const heapBuildMutableFreeze = base.heapMb?.buildMutableFreeze != null
-    ? medianRound(runs.map((r) => r.heapMb?.buildMutableFreeze).filter((v) => v != null), 3)
-    : undefined
-  const heapBuildFromDocuments = base.heapMb?.buildFromDocuments != null
-    ? medianRound(runs.map((r) => r.heapMb?.buildFromDocuments).filter((v) => v != null), 3)
-    : undefined
-  const heapLoadJson = base.heapMb?.loadJson != null
-    ? medianRound(runs.map((r) => r.heapMb?.loadJson).filter((v) => v != null), 3)
-    : undefined
-  const heapLoadBinary = base.heapMb?.loadBinary != null
-    ? medianRound(runs.map((r) => r.heapMb?.loadBinary).filter((v) => v != null), 3)
-    : undefined
-  const heapSavingPct = heapMutableTotal != null && heapFrozenTotal != null && heapMutableTotal > 0
-    ? Number((100 * (1 - heapFrozenTotal / heapMutableTotal)).toFixed(1))
-    : undefined
-  const heapOnlySavingPct = heapMutable != null && heapFrozen != null && heapMutable > 0
-    ? Number((100 * (1 - heapFrozen / heapMutable)).toFixed(1))
-    : undefined
-  const buildHeapSavingPct = heapBuildMutableFreeze != null && heapBuildFromDocuments != null && heapBuildMutableFreeze > 0
-    ? Number((100 * (1 - heapBuildFromDocuments / heapBuildMutableFreeze)).toFixed(1))
-    : undefined
+  const heapMutable = medianMetric(runs, (r) => r.heapMb?.mutable, 3)
+  const heapFrozen = medianMetric(runs, (r) => r.heapMb?.frozen, 3)
+  const heapMutableTotal = medianMetric(runs, (r) => r.heapMb?.mutableTotalResident, 3)
+  const heapFrozenTotal = medianMetric(runs, (r) => r.heapMb?.frozenTotalResident, 3)
+  const heapBuildMutableFreeze = medianMetric(runs, (r) => r.heapMb?.buildMutableFreeze, 3)
+  const heapBuildFromDocuments = medianMetric(runs, (r) => r.heapMb?.buildFromDocuments, 3)
+  const heapLoadJson = medianMetric(runs, (r) => r.heapMb?.loadJson, 3)
+  const heapLoadBinary = medianMetric(runs, (r) => r.heapMb?.loadBinary, 3)
+  const heapSavingPct = savingPct(heapMutableTotal, heapFrozenTotal)
+  const heapOnlySavingPct = savingPct(heapMutable, heapFrozen)
+  const buildHeapSavingPct = savingPct(heapBuildMutableFreeze, heapBuildFromDocuments)
 
-  const diskJson = medianRound(runs.map((r) => r.diskMb.json), 3)
-  const diskBinary = medianRound(runs.map((r) => r.diskMb.binary), 3)
-  const diskSavingPct = diskJson > 0
-    ? Number((100 * (1 - diskBinary / diskJson)).toFixed(1))
-    : 0
+  const diskJson = medianMetric(runs, (r) => r.diskMb?.json, 3)
+  const diskBinary = medianMetric(runs, (r) => r.diskMb?.binary, 3)
+  const diskSavingPct = savingPct(diskJson, diskBinary) ?? 0
 
-  const loadJson = medianRound(runs.map((r) => r.loadMs.json), 2)
-  const loadBinary = medianRound(runs.map((r) => r.loadMs.binary), 2)
-  const loadSavingPct = loadJson > 0
-    ? Number((100 * (1 - loadBinary / loadJson)).toFixed(1))
-    : 0
+  const loadJson = medianMetric(runs, (r) => r.loadMs?.json, 2)
+  const loadBinary = medianMetric(runs, (r) => r.loadMs?.binary, 2)
+  const loadSavingPct = savingPct(loadJson, loadBinary) ?? 0
 
   const memoryBreakdown = base.memoryBreakdown
     ? {
@@ -276,32 +266,32 @@ function aggregateScenarioRuns (runs) {
         nextId: base.memoryBreakdown.nextId,
         postings: {
           slotCount: base.memoryBreakdown.postings.slotCount,
-          allDocIdsBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.postings.allDocIdsBytes))),
-          allFreqsBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.postings.allFreqsBytes))),
-          offsetsBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.postings.offsetsBytes))),
-          lengthsBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.postings.lengthsBytes))),
-          totalTypedBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.postings.totalTypedBytes)))
+          allDocIdsBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.postings.allDocIdsBytes),
+          allFreqsBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.postings.allFreqsBytes),
+          offsetsBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.postings.offsetsBytes),
+          lengthsBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.postings.lengthsBytes),
+          totalTypedBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.postings.totalTypedBytes)
         },
         termIndex: {
           nodeCount: base.memoryBreakdown.termIndex.nodeCount,
           edgeCount: base.memoryBreakdown.termIndex.edgeCount,
-          estimatedBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.termIndex.estimatedBytes)))
+          estimatedBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.termIndex.estimatedBytes)
         },
         documents: {
           externalIdsSlots: base.memoryBreakdown.documents.externalIdsSlots,
           storedFieldsSlots: base.memoryBreakdown.documents.storedFieldsSlots,
           idToShortIdEntries: base.memoryBreakdown.documents.idToShortIdEntries,
-          fieldLengthMatrixBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.documents.fieldLengthMatrixBytes))),
-          avgFieldLengthBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.documents.avgFieldLengthBytes))),
-          storedFieldsJsonBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.documents.storedFieldsJsonBytes)))
+          fieldLengthMatrixBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.documents.fieldLengthMatrixBytes),
+          avgFieldLengthBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.documents.avgFieldLengthBytes),
+          storedFieldsJsonBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.documents.storedFieldsJsonBytes)
         },
-        estimatedStructuredBytes: Math.round(median(runs.map((r) => r.memoryBreakdown.estimatedStructuredBytes)))
+        estimatedStructuredBytes: medianIntMetric(runs, (r) => r.memoryBreakdown.estimatedStructuredBytes)
       }
     : undefined
 
-  const search = aggregateSearch(runs)
-  const scoreDrift = aggregateScoreDrift(runs)
-  const searchLevels = aggregateSearchLevels(runs)
+  const search = base.search ? aggregateSearch(runs) : undefined
+  const scoreDrift = base.scoreDrift ? aggregateScoreDrift(runs) : undefined
+  const searchLevels = base.searchLevels ? aggregateSearchLevels(runs) : undefined
 
   return {
     id: base.id,
@@ -332,25 +322,29 @@ function aggregateScenarioRuns (runs) {
         ...(heapOnlySavingPct != null ? { frozenVsMutableHeapOnlySavingPct: heapOnlySavingPct } : {}),
       },
     } : {}),
-    diskMb: {
-      json: diskJson,
-      binary: diskBinary,
-      binaryVsJsonSavingPct: diskSavingPct
-    },
-    loadMs: {
-      json: loadJson,
-      binary: loadBinary,
-      binaryVsJsonSavingPct: loadSavingPct
-    },
+    ...(diskJson != null && diskBinary != null ? {
+      diskMb: {
+        json: diskJson,
+        binary: diskBinary,
+        binaryVsJsonSavingPct: diskSavingPct
+      },
+    } : {}),
+    ...(loadJson != null && loadBinary != null ? {
+      loadMs: {
+        json: loadJson,
+        binary: loadBinary,
+        binaryVsJsonSavingPct: loadSavingPct
+      },
+    } : {}),
     memoryBreakdown,
-    search,
+    ...(search ? { search } : {}),
     ...(searchLevels ? { searchLevels } : {}),
-    scoreDrift,
+    ...(scoreDrift ? { scoreDrift } : {}),
     summary: {
       ...(heapSavingPct != null ? { heapFrozenVsMutableSavingPct: heapSavingPct } : {}),
-      diskBinaryVsJsonSavingPct: diskSavingPct,
-      loadBinaryVsJsonSavingPct: loadSavingPct,
-      searchFrozenP50AvgGainPct: avgFrozenP50GainPct(search),
+      ...(diskJson != null && diskBinary != null ? { diskBinaryVsJsonSavingPct: diskSavingPct } : {}),
+      ...(loadJson != null && loadBinary != null ? { loadBinaryVsJsonSavingPct: loadSavingPct } : {}),
+      ...(search ? { searchFrozenP50AvgGainPct: avgFrozenP50GainPct(search) } : {}),
     }
   }
 }
@@ -452,7 +446,7 @@ function computeScoreDrift (mutable, frozen, query, limit = 20) {
  * Run one benchmark scenario and return JSON-serializable metrics.
  * Search iteration counts come from `SEARCH_ITERATIONS` (env/CLI) and per-query calibration
  * (`searchIterationsForBatchEntry`); there is no per-call override.
- * @param {{ benchProfile?: 'full' | 'search' }} [benchOptions]
+ * @param {{ surfaces?: string[] }} [benchOptions]
  */
 export function runScenario (scenario, benchOptions = {}) {
   const surfaces = benchOptions.surfaces ?? [...ALL_SURFACES]

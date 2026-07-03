@@ -4,15 +4,12 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ALL_SURFACES, surfacesFromEnv, hasStructuralSurfaces, isCpuOnlySurfaces } from './framework/surfaces.mjs'
 import {
-  DEFAULT_BENCH_WARMUP,
   DEFAULT_HEAP_GC_PASSES,
   DEFAULT_HEAP_TRIALS,
   DEFAULT_HEAP_TRIALS_FAST,
   DEFAULT_HEAP_WARMUP,
   HEAP_WARMUP_CAP,
   madMbRound,
-  madOf,
-  madRound,
   median,
   medianRound,
 } from './benchStats.js'
@@ -48,8 +45,6 @@ export function forceGc (passes = 1, { strict = false } = {}) {
   for (let i = 0; i < passes; i++) global.gc()
 }
 
-export const heapBytes = () => process.memoryUsage().heapUsed
-
 export function memorySnapshot () {
   const u = process.memoryUsage()
   return {
@@ -69,7 +64,7 @@ export function mbRound (bytes, digits = 3) {
 }
 
 /** Percent change from base to value (negative = improvement when lower is better). */
-export function pctDelta (base, value) {
+function pctDelta (base, value) {
   if (base === 0) return null
   return ((value - base) / base) * 100
 }
@@ -170,15 +165,12 @@ export function medianOf (values) {
 }
 
 export {
-  DEFAULT_BENCH_WARMUP,
   DEFAULT_HEAP_GC_PASSES,
   DEFAULT_HEAP_TRIALS,
   DEFAULT_HEAP_TRIALS_FAST,
   DEFAULT_HEAP_WARMUP,
   HEAP_WARMUP_CAP,
   madMbRound,
-  madOf,
-  madRound,
   median,
   medianRound,
 }
@@ -259,24 +251,15 @@ export function defaultHeapGcPasses () {
   return DEFAULT_HEAP_GC_PASSES
 }
 
-export function defaultHeapWarmup (_documentCount = 0) {
+export function defaultHeapWarmup () {
   const fromEnv = Number(process.env.BENCH_HEAP_WARMUP)
   if (Number.isFinite(fromEnv) && fromEnv >= 0) return Math.floor(fromEnv)
   return DEFAULT_HEAP_WARMUP
 }
 
-export function parseHeapPathsArg (args = process.argv) {
-  const fromEnv = process.env.BENCH_HEAP_PATHS
-  const raw = argValue('--heap-paths', args) ?? fromEnv
-  if (!raw) return null
-  return raw.split(',').map((s) => s.trim()).filter(Boolean)
-}
-
 /** Routine defaults: median of 3 scenario runs; per-query iterations from calibration (20 / 50 if probe &lt; 0.1 ms). */
 export const DEFAULT_BENCHMARK_RUNS = 3
 export const DEFAULT_SEARCH_ITERATIONS = 20
-/** Max searches per clock read (fixed batches are calibrated in searchBenchBatches.json). */
-export const DEFAULT_BENCH_BATCH = 32
 
 export function defaultBenchmarkRuns () {
   const fromEnv = Number(process.env.RUNS)
@@ -288,12 +271,6 @@ export function defaultSearchIterations () {
   const fromEnv = Number(process.env.SEARCH_ITERATIONS)
   if (Number.isFinite(fromEnv) && fromEnv > 0) return Math.floor(fromEnv)
   return DEFAULT_SEARCH_ITERATIONS
-}
-
-export function defaultBenchWarmup () {
-  const fromEnv = Number(process.env.BENCH_WARMUP)
-  if (Number.isFinite(fromEnv) && fromEnv >= 0) return Math.floor(fromEnv)
-  return DEFAULT_BENCH_WARMUP
 }
 
 export function parseRunsArg (args = process.argv) {
@@ -388,12 +365,8 @@ function gitCommand (args) {
 }
 
 /** Modified tracked files only (untracked files ignored). */
-export function trackedTreePorcelain () {
+function trackedTreePorcelain () {
   return gitCommand('status --porcelain --untracked-files=no') ?? ''
-}
-
-export function isTrackedTreeClean () {
-  return trackedTreePorcelain() === ''
 }
 
 /**
@@ -430,7 +403,7 @@ export function enrichGitForBaseline (git) {
   }
 }
 
-export const PACKED_RADIX_HISTORY_PATH = join(REPO_ROOT, 'benchmarks/packed-radix-history.jsonl')
+const PACKED_RADIX_HISTORY_PATH = join(REPO_ROOT, 'benchmarks/packed-radix-history.jsonl')
 
 /** Compact row for packed-radix-history.jsonl. */
 export function packedRadixHistoryEntry (payload) {
