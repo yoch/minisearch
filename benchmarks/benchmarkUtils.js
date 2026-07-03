@@ -312,18 +312,11 @@ export function parseBenchSurfaces (args = process.argv) {
   return [...ALL_SURFACES]
 }
 
-export function parseBenchProfile (args = process.argv) {
-  const surfaces = parseBenchSurfaces(args)
-  if (isCpuOnlySurfaces(surfaces)) return 'search'
-  return 'full'
-}
-
 export function parseBenchmarkArgs (args = process.argv) {
   const surfaces = parseBenchSurfaces(args)
   return {
     runs: parseRunsArg(args),
     searchIterations: parseSearchIterationsArg(args),
-    benchProfile: parseBenchProfile(args),
     surfaces,
   }
 }

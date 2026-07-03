@@ -208,7 +208,7 @@ function savingPct (base, value) {
 
 function aggregateScenarioRuns (runs) {
   const base = runs[0]
-  if (base.benchProfile === 'search' || (base.benchSurfaces?.length === 1 && base.benchSurfaces[0] === 'search')) {
+  if (base.benchSurfaces?.length === 1 && base.benchSurfaces[0] === 'search') {
     const search = aggregateSearch(runs)
     const searchLevels = aggregateSearchLevels(runs)
     return {
@@ -217,7 +217,6 @@ function aggregateScenarioRuns (runs) {
       documentCount: base.documentCount,
       fields: base.fields,
       storeFields: base.storeFields,
-      benchProfile: 'search',
       benchSurfaces: base.benchSurfaces ?? ['search'],
       search,
       ...(searchLevels ? { searchLevels } : {}),
@@ -474,7 +473,6 @@ export function runScenario (scenario, benchOptions = {}) {
       documentCount: corpus.length,
       fields: options.fields,
       storeFields: options.storeFields || [],
-      benchProfile: 'search',
       benchSurfaces: surfaces,
       search: bench.search,
       ...(bench.searchLevels ? { searchLevels: bench.searchLevels } : {}),

@@ -70,6 +70,16 @@ function payloadHasStructuralData(payload) {
   )
 }
 
+function payloadProfile(payload) {
+  const surfaces = payload.benchSurfaces ?? payload.scenarios?.[0]?.benchSurfaces
+  if (Array.isArray(surfaces) && surfaces.length > 0) {
+    if (isCpuOnlySurfaces(surfaces)) return 'search'
+    if (surfaces.length === 1 && surfaces[0] === 'memory') return 'memory'
+    return 'full'
+  }
+  return payload.benchProfile ?? payload.scenarios?.[0]?.benchProfile ?? 'full'
+}
+
 function classifyRegression (metricKey, deltaPct, deltaPoints) {
   const t = THRESHOLDS[metricKey]
   if (!t) return 'ok'
@@ -220,8 +230,8 @@ function main () {
   }
   const curRuns = current.runs ?? 1
   const curIters = current.searchIterations ?? '(legacy)'
-  const curProfile = current.benchProfile ?? current.scenarios[0]?.benchProfile ?? 'full'
-  const refProfile = reference.benchProfile ?? reference.scenarios[0]?.benchProfile ?? 'full'
+  const curProfile = payloadProfile(current)
+  const refProfile = payloadProfile(reference)
   const diffSearchOnly = !payloadHasStructuralData(current)
     || !payloadHasStructuralData(reference)
     || isCpuOnlySurfaces(surfaces)

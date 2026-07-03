@@ -8,6 +8,7 @@
 - **Benchmark runner** — simplify `benchmarkUtils.js` / `benchmarkSuite.js` by dropping unused utility exports and centralizing optional-surface aggregation, so partial benchmark surfaces no longer produce empty `diskMb` / `loadMs` payloads.
 - **Test/bench memory breakdown** — move the retained-structure estimator out of `src/internal/frozenInternals.ts` into `testSupport/`, sharing one implementation across source and dist benchmark harnesses.
 - **Test import helpers** — move MiniSearch snapshot assembly helpers out of `src/internal/frozenInternals.ts` into `testSupport/`, leaving the internal hub focused on query/scoring probes.
+- **Benchmark metadata** — stop emitting redundant `benchProfile` in new captures; benchmark mode is now derived from `benchSurfaces`, while diff tooling still reads legacy baselines.
 
 ### Removed
 

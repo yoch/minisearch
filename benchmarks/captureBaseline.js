@@ -27,7 +27,7 @@ const useReference = process.argv.includes('--reference')
 const force = process.argv.includes('--force')
 const outFile = join(BASELINES_DIR, useReference ? 'reference.json' : 'latest.json')
 const mergeInto = argValue('--merge-into')
-const { runs, searchIterations, benchProfile, surfaces } = parseBenchmarkArgs()
+const { runs, searchIterations, surfaces } = parseBenchmarkArgs()
 
 if (mergeInto) {
   console.log(`Merging heap phase into ${mergeInto}…\n`)
@@ -92,7 +92,6 @@ const payload = {
     : 'local-latest',
   runs,
   searchIterations,
-  benchProfile,
   benchSurfaces: surfaces,
   searchBenchProtocol: getSearchBenchProtocol(),
   ...(heapBenchProtocol ? { heapBenchProtocol } : {}),
@@ -143,7 +142,7 @@ if (useReference) {
 if (payload.git.dirty && !useReference) {
   console.warn('  warning: working tree is dirty; latest.json may be harder to reproduce')
 }
-console.log(`  profile: ${payload.benchProfile}`)
+console.log(`  surfaces: ${payload.benchSurfaces.join(', ')}`)
 console.log(`  runs: ${runs}, search iterations: ${searchIterations} (median per scenario)`)
 if (heapBenchProtocol) {
   console.log(`  heap protocol: v${heapBenchProtocol.version}, trials=${heapBenchProtocol.trials}, scenarios=${heapBenchProtocol.scenarioAllowlist.length}`)
