@@ -96,7 +96,7 @@ function isQueryCombination(query: Query): query is QueryCombination {
 }
 
 function combinationHasWildcard(query: QueryCombination): boolean {
-  return query.queries.some(q => isWildcardQuery(q) || (typeof q === 'object' && q != null && 'queries' in q && combinationHasWildcard(q)))
+  return query.queries.some(q => isWildcardQuery(q) || (isQueryCombination(q) && combinationHasWildcard(q)))
 }
 
 function isGatedCombinationOperator(operator: CombinationOperator): boolean {
