@@ -48,3 +48,9 @@ export function assertShortIdInRange(shortId: number, nextId: number, context: s
     throw snapshotError(`${context} shortId ${shortId} must be < nextId ${nextId}`)
   }
 }
+
+export function assertFieldIdInRange(fieldId: number, fieldCount: number, context: string): void {
+  if (fieldId >= fieldCount) {
+    throw snapshotError(`${context} fieldId ${fieldId} must be < field count ${fieldCount}`)
+  }
+}

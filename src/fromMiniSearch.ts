@@ -33,12 +33,6 @@ const SUPPORTED_SERIALIZATION_VERSIONS = new Set([1, 2])
 /** Sentinel short id used while compacting sparse MiniSearch snapshots to dense ids. */
 const DISCARDED_DOC_ID = 0xffffffff
 
-// Import path: validate a canonical non-negative integer key with an allocation-free
-// digit scan instead of a regex.
-function parseIntegerKey(key: string, context: string): number {
-  return parseCanonicalIntegerKey(key, context)
-}
-
 // Postings segments must be sorted by docId for search (binary seek, gates). We do not
 // re-check order here: MiniSearch.toJSON() emits ascending shortIds, dense remap preserves
 // monotonicity, and JS integer object keys are enumerated in ascending order (for…in).
@@ -67,7 +61,7 @@ function validateActiveShortIds(
   nextId: number,
 ): number[] {
   const shortIds = Object.keys(documentIds).map((shortIdStr) => {
-    const shortId = parseIntegerKey(shortIdStr, 'documentIds')
+    const shortId = parseCanonicalIntegerKey(shortIdStr, 'documentIds')
     assertShortIdInRange(shortId, nextId, 'documentIds')
     return shortId
   })
@@ -122,7 +116,7 @@ export function buildFrozenAssembleParamsFromMiniSearchSnapshot<T>(
   const activeShortIds = validateActiveShortIds(documentIds, documentCount, nextId)
   const activeShortIdSet = new Set(activeShortIds)
   for (const shortIdStr of Object.keys(storedFieldSnapshot)) {
-    const shortId = parseIntegerKey(shortIdStr, 'storedFields')
+    const shortId = parseCanonicalIntegerKey(shortIdStr, 'storedFields')
     assertShortIdInRange(shortId, nextId, 'storedFields')
     if (!activeShortIdSet.has(shortId)) {
       throw snapshotError(`storedFields shortId ${shortId} is missing from documentIds`)
@@ -158,7 +152,7 @@ export function buildFrozenAssembleParamsFromMiniSearchSnapshot<T>(
     }
   } else {
     for (const [shortIdStr, id] of Object.entries(documentIds)) {
-      const shortId = parseIntegerKey(shortIdStr, 'documentIds')
+      const shortId = parseCanonicalIntegerKey(shortIdStr, 'documentIds')
       externalIds[shortId] = id
       storedFieldRows[shortId] = storedFieldSnapshot[shortIdStr] as Record<string, unknown> | undefined
     }
@@ -173,7 +167,7 @@ export function buildFrozenAssembleParamsFromMiniSearchSnapshot<T>(
   // coverage (every active document must carry a fieldLength row).
   let fieldLengthCovered = 0
   for (const [shortIdStr, lengths] of Object.entries(fieldLength)) {
-    const shortId = parseIntegerKey(shortIdStr, 'fieldLength')
+    const shortId = parseCanonicalIntegerKey(shortIdStr, 'fieldLength')
     assertShortIdInRange(shortId, nextId, 'fieldLength')
     if (!activeShortIdSet.has(shortId)) {
       throw snapshotError(`fieldLength shortId ${shortId} is missing from documentIds`)
