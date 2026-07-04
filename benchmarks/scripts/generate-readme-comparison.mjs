@@ -27,10 +27,22 @@ const payload = JSON.parse(readFileSync(baselinePath, 'utf8'))
 const HERO_IDS = [
   'divina-storeFields',
   'divina-indexOnly',
-  'extreme-highFrequency',
+  'extreme-giantVocabulary',
   'denseNumericIds-100k',
+  'genericStringIds-100k',
   'docIdUint16Boundary-65535',
+  'docIdUint16Boundary-65536',
 ]
+
+const HERO_LABELS = {
+  'divina-storeFields': 'Divina, with stored text',
+  'divina-indexOnly': 'Divina, index only',
+  'extreme-giantVocabulary': 'Giant vocabulary (50k terms)',
+  'denseNumericIds-100k': 'Dense numeric ids',
+  'genericStringIds-100k': 'Generic string ids',
+  'docIdUint16Boundary-65535': 'Uint16 doc id boundary',
+  'docIdUint16Boundary-65536': 'Uint32 doc id boundary',
+}
 
 /** `frozenVsMutableSavingPct` etc. — positive = frozen wins (smaller/faster). */
 function fmtSaving (n) {
@@ -53,12 +65,19 @@ function fmtMs (n, digits = 2) {
   return `${n.toFixed(1)} ms`
 }
 
+/** Median bench timings for README table cells (load/freeze). */
+function fmtBenchMs (n) {
+  if (n == null) return '—'
+  if (n < 10) return `${n.toFixed(1)} ms`
+  return `${Math.round(n)} ms`
+}
+
 function fmtHeapPair (scenario) {
   const mut = scenario.heapMb?.mutableTotalResident ?? scenario.memoryMb?.mutable?.totalResidentApprox
   const frz = scenario.heapMb?.frozenTotalResident ?? scenario.memoryMb?.frozen?.totalResidentApprox
   const save = scenario.heapMb?.frozenVsMutableSavingPct
   if (mut == null || frz == null) return '—'
-  return `${frz.toFixed(2)} vs ${mut.toFixed(1)} MB total (${fmtSaving(save)})`
+  return `${frz.toFixed(2)} vs ${mut.toFixed(1)} MB (~${save?.toFixed(0) ?? '—'}% less)`
 }
 
 function scenarioById (id) {
@@ -69,20 +88,20 @@ function searchGainPct (scenario) {
   return scenario?.summary?.searchFrozenP50AvgGainPct
 }
 
+function heroLabel (scenario) {
+  return HERO_LABELS[scenario.id]
+    ?? scenario.name.replace(/^Divina Commedia — /, 'Divina ').replace(/^Extreme — /, '')
+}
+
 function heroRow (scenario) {
   const docs = scenario.documentCount?.toLocaleString('en-US') ?? '—'
   const heap = fmtHeapPair(scenario)
   const disk = fmtSaving(scenario.diskMb?.binaryVsJsonSavingPct)
-  const load = fmtFaster(scenario.loadMs?.binaryVsJsonSavingPct)
+  const loadJson = fmtBenchMs(scenario.loadMs?.json)
+  const loadBinary = fmtBenchMs(scenario.loadMs?.binary)
+  const freeze = fmtBenchMs(scenario.indexing?.freezeMs)
   const search = fmtFaster(searchGainPct(scenario))
-  const label = {
-    'divina-storeFields': 'Divina, with stored text',
-    'divina-indexOnly': 'Divina, index only',
-    'extreme-highFrequency': 'High-frequency terms',
-    'denseNumericIds-100k': 'Dense numeric ids',
-    'docIdUint16Boundary-65535': 'Uint16 doc id boundary',
-  }[scenario.id] ?? scenario.name.replace(/^Divina Commedia — /, 'Divina ').replace(/^Extreme — /, '')
-  return `| ${label} | ${docs} | ${heap} | ${disk} | ${load} | ${search} |`
+  return `| ${heroLabel(scenario)} | ${docs} | ${heap} | ${disk} | ${loadJson} | ${loadBinary} | ${freeze} | ${search} |`
 }
 
 function divinaExactLine () {
@@ -112,6 +131,7 @@ function buildBlock () {
   const node = payload.node ?? '—'
   const minisearch = payload.minisearchVersion ?? '—'
   const runs = payload.runs ?? '—'
+  const commitShort = payload.baselineCommit?.slice(0, 7) ?? payload.git?.commitShort ?? '—'
   const { wins, total } = aggregateSearchWins()
 
   const heroes = HERO_IDS.map(scenarioById).filter(Boolean)
@@ -120,7 +140,7 @@ function buildBlock () {
 
   const heapProto = payload.heapBenchProtocol?.version
   const heapNote = heapProto != null
-    ? `Heap protocol v${heapProto} (isolated scenario processes, in-process trials, median+MAD; totalResident = heapUsed + external on both sides) — trend, not exact accounting. Index RAM column shows — for scenarios outside the heap allowlist.`
+    ? `Heap protocol v${heapProto} (isolated scenario processes, in-process trials, median+MAD; totalResident = heapUsed + external on both sides) — trend, not exact accounting.`
     : 'Heap is measured with one index alive and should be read as a trend, not exact accounting.'
 
   return `${START} — pnpm bench:readme -->
@@ -128,13 +148,15 @@ function buildBlock () {
 
 Same corpora, same BM25-style queries, MiniSearch ${minisearch} as the reference.
 
-| Scenario | Docs | Index RAM | Binary size | Load time | Search p50 |
-|----------|-----:|-----------|------------:|----------:|-----------:|
+| Scenario | Docs | Index RAM | Binary size | Load JSON | Load binary | Freeze import | Search p50 |
+|----------|-----:|-----------|------------:|----------:|------------:|--------------:|-----------:|
 ${tableRows}
+
+Load JSON = \`MiniSearch.loadJSON\` on the same \`toJSON\` snapshot. Load binary = \`loadBinarySync\` after \`saveBinarySync\`. Freeze import = one-time \`FrozenMiniSearch.fromJSON\` (not the hot reload path).
 
 Across this full run, frozen is faster on **${wins}/${total}** search cases. ${exactLine ?? ''}
 
-Numbers are from \`${baselinePath.replace(`${root}/`, '')}\`, captured ${captured} on Node ${node}, ${runs} runs per scenario. ${heapNote}
+Numbers are from \`${baselinePath.replace(`${root}/`, '')}\` @ \`${commitShort}\`, captured ${captured} on Node ${node}, ${runs} runs per scenario. ${heapNote}
 ${END}`
 }
 
