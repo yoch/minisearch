@@ -112,7 +112,7 @@ export const calcBM25Score = (
 )
 
 const getOwnProperty = (object: Record<string, unknown>, property: string): unknown =>
-  Object.prototype.hasOwnProperty.call(object, property) ? object[property] : undefined
+  Object.hasOwn(object, property) ? object[property] : undefined
 
 /** Field boosts for one query spec; `names` is computed once from `boosts`. */
 export type FieldBoostsForQuery = {

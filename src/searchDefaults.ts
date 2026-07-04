@@ -35,7 +35,7 @@ export type FrozenDefaultOptionName = keyof typeof defaultFrozenLoadOptions
 export function getFrozenDefault<K extends FrozenDefaultOptionName>(
   optionName: K,
 ): (typeof defaultFrozenLoadOptions)[K] {
-  if (!Object.prototype.hasOwnProperty.call(defaultFrozenLoadOptions, optionName)) {
+  if (!Object.hasOwn(defaultFrozenLoadOptions, optionName)) {
     throw new Error(`FrozenMiniSearch: unknown option "${String(optionName)}"`)
   }
   return defaultFrozenLoadOptions[optionName]
