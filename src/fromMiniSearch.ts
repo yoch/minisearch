@@ -3,6 +3,13 @@ import { materializeFieldLengthMatrix } from './fieldLengthMatrix'
 import { parseSnapshotIndex } from './freezeSnapshotIndex'
 import { assertFieldsMatchSnapshot, resolveFrozenOptions } from './frozenOptions'
 import { storedFieldsFromRows } from './storedFieldsLayout'
+import {
+  assertNonNegativeInteger,
+  assertRecord,
+  assertShortIdInRange,
+  parseCanonicalIntegerKey,
+  snapshotError,
+} from './snapshotValidation'
 import type { FrozenAssembleParams } from './frozenTypes'
 import type { Options } from './searchTypes'
 
@@ -26,56 +33,10 @@ const SUPPORTED_SERIALIZATION_VERSIONS = new Set([1, 2])
 /** Sentinel short id used while compacting sparse MiniSearch snapshots to dense ids. */
 const DISCARDED_DOC_ID = 0xffffffff
 
-function snapshotError(detail: string): Error {
-  return new Error(`FrozenMiniSearch: invalid MiniSearch snapshot: ${detail}`)
-}
-
-function assertRecord(value: unknown, context: string): Record<string, unknown> {
-  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-    throw snapshotError(`${context} must be an object`)
-  }
-  return value as Record<string, unknown>
-}
-
-function assertNonNegativeInteger(value: unknown, context: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
-    throw snapshotError(`${context} must be a non-negative integer`)
-  }
-  return value as number
-}
-
 // Import path: validate a canonical non-negative integer key with an allocation-free
 // digit scan instead of a regex.
 function parseIntegerKey(key: string, context: string): number {
-  const len = key.length
-  let valid = len > 0
-  let n = 0
-  if (valid) {
-    const c0 = key.charCodeAt(0)
-    if (c0 < 48 || c0 > 57 || (c0 === 48 && len > 1)) {
-      valid = false
-    } else {
-      n = c0 - 48
-      for (let i = 1; i < len; i++) {
-        const c = key.charCodeAt(i)
-        if (c < 48 || c > 57) {
-          valid = false
-          break
-        }
-        n = n * 10 + (c - 48)
-      }
-    }
-  }
-  if (!valid || !Number.isSafeInteger(n)) {
-    throw snapshotError(`${context} key "${key}" must be a non-negative integer`)
-  }
-  return n
-}
-
-function assertShortIdInRange(shortId: number, nextId: number, context: string): void {
-  if (shortId >= nextId) {
-    throw snapshotError(`${context} shortId ${shortId} must be < nextId ${nextId}`)
-  }
+  return parseCanonicalIntegerKey(key, context)
 }
 
 // Postings segments must be sorted by docId for search (binary seek, gates). We do not

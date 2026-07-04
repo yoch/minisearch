@@ -161,6 +161,18 @@ describe('fromMiniSearch loaders', () => {
       .toThrow(/invalid MiniSearch snapshot/)
   })
 
+  test('fromJSON rejects leading-zero posting docId keys in index', () => {
+    const snapshot = validSnapshot({
+      documentCount: 12,
+      nextId: 12,
+      documentIds: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, `doc-${i}`])),
+      fieldLength: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, [1]])),
+      index: [['hello', { 0: { '01': 1 } }]],
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] }))
+      .toThrow(/invalid MiniSearch snapshot: index shortId key "01" must be a non-negative integer/)
+  })
+
   test('fromJSON rejects a posting docId outside nextId', () => {
     const snapshot = validSnapshot({
       index: [['hello', { 0: { 99: 1 } }]],
@@ -377,6 +389,15 @@ describe('fromMiniSearch loaders', () => {
     })
     const frozen = FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] })
     expect(frozen.search('hello').map(r => r.id)).toEqual(['a'])
+  })
+
+  test('fromJSON rejects malformed serializationVersion 1 index keys', () => {
+    const snapshot = validSnapshot({
+      serializationVersion: 1,
+      index: [['hello', { 0: { ds: { '01': 1 } } }]],
+    })
+    expect(() => FrozenMiniSearch.fromJSON(JSON.stringify(snapshot), { fields: ['text'] }))
+      .toThrow(/invalid MiniSearch snapshot: index shortId key "01" must be a non-negative integer/)
   })
 
   test('fromJSON postings layout matches fromDocuments', () => {

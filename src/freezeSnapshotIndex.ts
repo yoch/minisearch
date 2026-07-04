@@ -1,5 +1,6 @@
 import { packTermsFromList } from './PackedRadixTree/packTermList'
 import { IncrementalPostingsAccumulator } from './incrementalPostings'
+import { parseCanonicalIntegerKey, snapshotError } from './snapshotValidation'
 import type PackedRadixTree from './PackedRadixTree'
 import type { MiniSearchSnapshot } from './fromMiniSearch'
 
@@ -18,53 +19,27 @@ export type SnapshotIndexAccumulation = {
   termCount: number
 }
 
-function snapshotIndexError(detail: string): Error {
-  return new Error(`FrozenMiniSearch: invalid MiniSearch snapshot: ${detail}`)
-}
-
 /** Hot-path canonical integer key parse for MiniSearch wire keys. */
 function parseIndexIntegerKey(key: string, label: 'fieldId' | 'shortId'): number {
-  const len = key.length
-  if (len === 0) {
-    throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
-  }
-
-  const c0 = key.charCodeAt(0)
-  if (c0 < 48 || c0 > 57 || (c0 === 48 && len > 1)) {
-    throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
-  }
-
-  let n = c0 - 48
-  for (let i = 1; i < len; i++) {
-    const c = key.charCodeAt(i)
-    if (c < 48 || c > 57) {
-      throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
-    }
-    n = n * 10 + (c - 48)
-  }
-
-  if (!Number.isSafeInteger(n)) {
-    throw snapshotIndexError(`index ${label} key "${key}" must be a non-negative integer`)
-  }
-  return n
+  return parseCanonicalIntegerKey(key, `index ${label}`)
 }
 
 function assertIndexFieldId(fieldId: number, fieldCount: number): void {
   if (!Number.isSafeInteger(fieldId) || fieldId < 0 || fieldId >= fieldCount) {
-    throw snapshotIndexError(`index fieldId ${fieldId} must be < field count ${fieldCount}`)
+    throw snapshotError(`index fieldId ${fieldId} must be < field count ${fieldCount}`)
   }
 }
 
 function assertIndexShortId(shortId: number, nextId: number): void {
   if (!Number.isSafeInteger(shortId) || shortId < 0 || shortId >= nextId) {
-    throw snapshotIndexError(`index shortId ${shortId} must be < nextId ${nextId}`)
+    throw snapshotError(`index shortId ${shortId} must be < nextId ${nextId}`)
   }
 }
 
 function readPostingFrequency(value: unknown): number {
   const freq = value as number
   if (!Number.isSafeInteger(freq) || freq <= 0) {
-    throw snapshotIndexError('index posting frequency must be a positive integer')
+    throw snapshotError('index posting frequency must be a positive integer')
   }
   return freq
 }
@@ -154,7 +129,7 @@ export function accumulateSnapshotIndex(
 ): SnapshotIndexAccumulation {
   const { index: entries, serializationVersion } = snapshot
   if (!Array.isArray(entries)) {
-    throw snapshotIndexError('index must be an array')
+    throw snapshotError('index must be an array')
   }
   if (serializationVersion === 1) {
     return accumulateSnapshotIndexV1(entries, fieldCount, nextId, shortIdRemap)
