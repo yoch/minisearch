@@ -49,13 +49,15 @@ const HERO_LABELS = {
 
 function fmtSaving (n) {
   if (n == null || Number.isNaN(n)) return '—'
-  if (n <= 0) return `${n.toFixed(0)}%`
+  if (n < 0) return `~${Math.abs(n).toFixed(0)}% more`
+  if (n === 0) return '0%'
   return `~${n.toFixed(0)}% less`
 }
 
 function fmtFaster (n) {
   if (n == null || Number.isNaN(n)) return '—'
-  if (n <= 0) return `${n.toFixed(0)}%`
+  if (n < 0) return `~${Math.abs(n).toFixed(0)}% slower`
+  if (n === 0) return '0%'
   return `~${n.toFixed(0)}% faster`
 }
 
@@ -78,9 +80,50 @@ function fmtNum (n, digits = 2) {
   return Number(n).toFixed(digits)
 }
 
+function fmtCount (n) {
+  if (n == null || Number.isNaN(n)) return '—'
+  return Number(n).toLocaleString('en-US')
+}
+
 function fmtPct (n) {
   if (n == null || Number.isNaN(n)) return '—'
   return `${Number(n).toFixed(1)}%`
+}
+
+function fmtBytes (n) {
+  if (n == null || Number.isNaN(n)) return '—'
+  const bytes = Number(n)
+  const compact = bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(2)} MiB`
+    : bytes >= 1024
+      ? `${(bytes / 1024).toFixed(1)} KiB`
+      : `${bytes} B`
+  return `${compact} (${fmtCount(bytes)} bytes)`
+}
+
+function fmtValue (value) {
+  if (value == null) return '—'
+  if (Array.isArray(value)) return value.length === 0 ? '—' : value.map(fmtValue).join(', ')
+  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  if (typeof value === 'number') return Number.isInteger(value) ? fmtCount(value) : String(value)
+  return String(value)
+}
+
+function fmtList (values) {
+  if (!values || values.length === 0) return '—'
+  return values.map((value) => `\`${value}\``).join(', ')
+}
+
+function mdCell (value) {
+  return String(value).replaceAll('\n', '<br>').replaceAll('|', '\\|')
+}
+
+function htmlEscape (value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 }
 
 function fmtHeapPair (scenario) {
@@ -116,14 +159,14 @@ function heroRow (scenario) {
 }
 
 function summaryRow (scenario) {
-  const docs = scenario.documentCount?.toLocaleString('en-US') ?? '—'
+  const docs = fmtCount(scenario.documentCount)
   const heap = fmtHeapPair(scenario)
   const disk = fmtSaving(scenario.diskMb?.binaryVsJsonSavingPct)
   const loadJson = fmtBenchMs(scenario.loadMs?.json)
   const loadBinary = fmtBenchMs(scenario.loadMs?.binary)
   const freeze = fmtBenchMs(scenario.indexing?.freezeMs)
   const search = fmtFaster(searchGainPct(scenario))
-  return `| \`${scenario.id}\` | ${docs} | ${heap} | ${disk} | ${loadJson} | ${loadBinary} | ${freeze} | ${search} |`
+  return `| [\`${scenario.id}\`](#${scenarioAnchor(scenario)}) | ${docs} | ${heap} | ${disk} | ${loadJson} | ${loadBinary} | ${freeze} | ${search} |`
 }
 
 function divinaExactLine () {
@@ -166,84 +209,56 @@ function captureMeta () {
 
 function mdTable (headers, rows) {
   if (rows.length === 0) return '_No data._\n'
-  const head = `| ${headers.join(' | ')} |`
+  const head = `| ${headers.map(mdCell).join(' | ')} |`
   const sep = `| ${headers.map(() => '---').join(' | ')} |`
   return `${head}\n${sep}\n${rows.join('\n')}\n`
 }
 
-function indexingTable (scenario) {
-  const idx = scenario.indexing
-  if (!idx) return '_Not measured._\n'
-  const rows = []
-  const metrics = [
-    ['addAll', idx.addAllMs],
-    ['fromDocuments', idx.fromDocumentsMs],
-    ['toJSON (migrate)', idx.toJSONMs],
-    ['freeze import (fromJSON)', idx.freezeMs],
-    ['JSON serialize (save)', idx.jsonSerializeMs],
-    ['saveBinary', idx.saveBinaryMs],
-  ]
-  for (const [label, ms] of metrics) {
-    if (ms != null) rows.push(`| ${label} | ${fmtBenchMs(ms)} |`)
-  }
-  if (idx.binaryMagic) rows.push(`| binary magic | ${idx.binaryMagic} |`)
-  return mdTable(['Metric', 'Time'], rows)
+function scenarioAnchor (scenario) {
+  return `scenario-${scenario.id.replaceAll(/[^a-zA-Z0-9_-]/g, '-')}`
 }
 
-function diskTable (scenario) {
-  const disk = scenario.diskMb
-  if (!disk) return '_Not measured._\n'
-  return mdTable(['Format', 'Size', 'vs JSON'], [
-    `| JSON snapshot | ${fmtNum(disk.json, 3)} MB | — |`,
-    `| Binary snapshot | ${fmtNum(disk.binary, 3)} MB | ${fmtSaving(disk.binaryVsJsonSavingPct)} |`,
-  ])
+function runContextTable (meta) {
+  const searchProto = payload.searchBenchProtocol
+  const heapProto = payload.heapBenchProtocol
+  const rows = [
+    ['Baseline', `\`${meta.baselineRel}\` @ \`${meta.commitShort}\``],
+    ['Runtime', `Node ${meta.node}; MiniSearch ${meta.minisearch}; ${meta.runs} requested runs`],
+    ['Surfaces', fmtList(payload.benchSurfaces)],
+    ['Search protocol', searchProto ? `v${searchProto.protocolVersion}; paired hrtime; batch target ${searchProto.batchTargetMs} ms; ${searchProto.defaultIterations}/${searchProto.fastIterations} iterations` : '—'],
+    ['Heap protocol', heapProto ? `v${heapProto.version}; ${heapProto.trials} trials; totalResident = heapUsed + external; isolated per scenario` : '—'],
+  ].map(([metric, value]) => `| ${metric} | ${value} |`)
+  return mdTable(['Context', 'Value'], rows)
 }
 
-function loadTable (scenario) {
-  const load = scenario.loadMs
-  if (!load) return '_Not measured._\n'
-  return mdTable(['Path', 'Time', 'vs JSON load'], [
-    `| MiniSearch.loadJSON | ${fmtBenchMs(load.json)} | — |`,
-    `| FrozenMiniSearch.loadBinarySync | ${fmtBenchMs(load.binary)} | ${fmtSaving(load.binaryVsJsonSavingPct)} |`,
-  ])
-}
-
-function heapTable (scenario) {
-  if (scenario.heapSkipped) {
-    return `_Heap skipped (${scenario.heapSkipped})._\n`
-  }
+function performanceTable (scenario) {
+  const idx = scenario.indexing ?? {}
+  const disk = scenario.diskMb ?? {}
+  const load = scenario.loadMs ?? {}
   const heap = scenario.heapMb
-  const mem = scenario.memoryMb
-  if (!heap && !mem) return '_Not measured._\n'
-  const rows = []
-  if (heap) {
-    rows.push(
-      `| Mutable total resident | ${fmtNum(heap.mutableTotalResident, 3)} MB | heap ${fmtNum(heap.mutable, 3)} MB |`,
-      `| Frozen total resident | ${fmtNum(heap.frozenTotalResident, 3)} MB | heap ${fmtNum(heap.frozen, 3)} MB |`,
-      `| Frozen vs mutable saving | ${fmtPct(heap.frozenVsMutableSavingPct)} | heap-only ${fmtPct(heap.frozenVsMutableHeapOnlySavingPct)} |`,
-    )
-  }
-  if (mem?.mutable && mem?.frozen) {
-    rows.push(
-      `| Mutable external | ${fmtNum(mem.mutable.external, 3)} MB | arrayBuffers ${fmtNum(mem.mutable.arrayBuffers, 3)} MB |`,
-      `| Frozen external | ${fmtNum(mem.frozen.external, 3)} MB | arrayBuffers ${fmtNum(mem.frozen.arrayBuffers, 3)} MB |`,
-    )
-  }
-  const stab = scenario.heapStability
-  if (stab) {
-    rows.push(
-      `| MAD (mutable total) | ${fmtNum(stab.mutableTotalResidentMadMb, 3)} MB | frozen ${fmtNum(stab.frozenTotalResidentMadMb, 3)} MB |`,
-    )
-  }
+  const heapText = scenario.heapSkipped
+    ? `skipped (${scenario.heapSkipped})`
+    : heap
+      ? `${fmtNum(heap.frozenTotalResident, 2)} MB frozen vs ${fmtNum(heap.mutableTotalResident, 1)} MB mutable (${fmtSaving(heap.frozenVsMutableSavingPct)})`
+      : '—'
+  const rows = [
+    ['Build mutable addAll', fmtBenchMs(idx.addAllMs), 'MiniSearch baseline build path'],
+    ['Build frozen fromDocuments', fmtBenchMs(idx.fromDocumentsMs), 'Direct frozen build path'],
+    ['Migrate toJSON → fromJSON', `${fmtBenchMs(idx.toJSONMs)} + ${fmtBenchMs(idx.freezeMs)}`, 'MiniSearch snapshot migration'],
+    ['Save snapshot', `${fmtBenchMs(idx.jsonSerializeMs)} JSON / ${fmtBenchMs(idx.saveBinaryMs)} binary`, idx.binaryMagic ? `binary ${idx.binaryMagic}` : '—'],
+    ['Snapshot size', `${fmtNum(disk.json, 3)} MB JSON / ${fmtNum(disk.binary, 3)} MB binary`, fmtSaving(disk.binaryVsJsonSavingPct)],
+    ['Load snapshot', `${fmtBenchMs(load.json)} JSON / ${fmtBenchMs(load.binary)} binary`, fmtSaving(load.binaryVsJsonSavingPct).replace('more', 'slower')],
+    ['Resident index RAM', heapText, heap?.frozenVsMutableHeapOnlySavingPct == null ? '—' : `heap-only ${fmtSaving(heap.frozenVsMutableHeapOnlySavingPct)}`],
+  ].map(([metric, value, detail]) => `| ${metric} | ${value} | ${detail} |`)
   return mdTable(['Metric', 'Value', 'Detail'], rows)
 }
 
 function searchTable (scenario) {
   const rows = (scenario.search ?? []).map((row) =>
-    `| ${row.label} | \`${row.query ?? '—'}\` | ${row.batchSize ?? '—'} | ${row.searchIterations ?? '—'} | ${fmtMs(row.mutableP50)} | ${fmtMs(row.frozenP50)} | ${fmtMs(row.mutableP95)} | ${fmtMs(row.frozenP95)} | ${fmtNum(row.pairedRatioP50)} | ${fmtPct(row.frozenP50VsMutablePct)} |`,
+    `| ${row.label} | \`${row.query ?? '—'}\` | ${fmtMs(row.mutableP50)} | ${fmtMs(row.frozenP50)} | ${fmtMs(row.mutableP95)} | ${fmtMs(row.frozenP95)} | ${fmtNum(row.pairedRatioP50)} | ${fmtPct(row.frozenP50VsMutablePct)} | ${row.batchSize ?? '—'}×${row.searchIterations ?? '—'} | ${row.belowSearchFloor ? 'yes' : 'no'} |`,
   )
   return mdTable(
-    ['Label', 'Query', 'Batch', 'Iter', 'Mutable p50', 'Frozen p50', 'Mutable p95', 'Frozen p95', 'Ratio p50', 'Frozen gain'],
+    ['Label', 'Query', 'Mutable p50', 'Frozen p50', 'Mutable p95', 'Frozen p95', 'Ratio p50', 'Frozen delta', 'Batch×iter', '<0.1ms'],
     rows,
   )
 }
@@ -253,16 +268,15 @@ function searchLevelsTable (scenario) {
   if (!levels || Object.keys(levels).length === 0) return '_Not measured._\n'
   const rows = []
   for (const [label, entry] of Object.entries(levels)) {
-    for (const level of ['L0', 'L1', 'L2']) {
-      const row = entry[level]
-      if (!row) continue
-      rows.push(
-        `| ${label} | ${level} | ${fmtMs(row.mutableP50)} | ${fmtMs(row.frozenP50)} | ${fmtMs(row.mutableP95)} | ${fmtMs(row.frozenP95)} | ${fmtNum(row.pairedRatioP50)} | ${fmtPct(row.frozenP50VsMutablePct)} | ${row.batchSize ?? '—'} |`,
-      )
-    }
+    const l0 = entry.L0
+    const l1 = entry.L1
+    const l2 = entry.L2
+    rows.push(
+      `| ${label} | \`${entry.term ?? '—'}\` | ${fmtMs(l0?.mutableP50)} → ${fmtMs(l0?.frozenP50)} | ${fmtMs(l1?.frozenP50)} | ${fmtMs(l2?.mutableP50)} → ${fmtMs(l2?.frozenP50)} | ${fmtNum(l2?.pairedRatioP50)} | ${fmtPct(l2?.frozenP50VsMutablePct)} | ${l2?.batchSize ?? l1?.batchSize ?? l0?.batchSize ?? '—'} |`,
+    )
   }
   return mdTable(
-    ['Query label', 'Level', 'Mutable p50', 'Frozen p50', 'Mutable p95', 'Frozen p95', 'Ratio p50', 'Frozen gain', 'Batch'],
+    ['Query label', 'Term', 'L0 lookup p50', 'L1 frozen p50', 'L2 search p50', 'L2 ratio', 'L2 delta', 'Batch'],
     rows,
   )
 }
@@ -271,70 +285,87 @@ function scoreDriftTable (scenario) {
   const rows = (scenario.scoreDrift ?? []).map((row) =>
     `| \`${row.query}\` | ${row.topK ?? '—'} | ${fmtNum(row.maxAbsScoreDelta, 4)} | ${fmtPct(row.maxRelScoreDeltaPct)} | ${row.missingInFrozenTopK ?? '—'} | ${row.topKOrderChanged ? 'yes' : 'no'} |`,
   )
-  if (rows.length === 0) return '_Not measured._\n'
+  if (rows.length === 0) return ''
   return mdTable(['Query', 'topK', 'Max abs Δ', 'Max rel Δ', 'Missing in frozen topK', 'Order changed'], rows)
-}
-
-function summaryMetricsTable (scenario) {
-  const s = scenario.summary ?? {}
-  const rows = [
-    ['Disk binary vs JSON', fmtSaving(s.diskBinaryVsJsonSavingPct)],
-    ['Load binary vs JSON', fmtSaving(s.loadBinaryVsJsonSavingPct)],
-    ['Search frozen p50 avg gain', fmtFaster(s.searchFrozenP50AvgGainPct)],
-    ['Heap frozen vs mutable saving', fmtSaving(s.heapFrozenVsMutableSavingPct)],
-  ].map(([metric, value]) => `| ${metric} | ${value} |`)
-  return mdTable(['Summary metric', 'Value'], rows)
 }
 
 function memoryBreakdownTable (scenario) {
   const b = scenario.memoryBreakdown
   if (!b) return '_Not measured._\n'
+  const postingsDetail = [
+    b.postings?.layout,
+    b.postings?.docIdWidth == null ? null : `${b.postings.docIdWidth}-bit doc ids`,
+  ].filter(Boolean).join(', ') || '—'
+  const docsDetail = [
+    b.documents?.idLookupMode,
+    b.documents?.storedFieldsJsonBytes ? `${fmtBytes(b.documents.storedFieldsJsonBytes)} stored fields` : null,
+  ].filter(Boolean).join(', ') || '—'
   const rows = [
-    ['Terms', String(b.termCount ?? '—')],
-    ['Documents', String(b.documentCount ?? '—')],
-    ['nextId', String(b.nextId ?? '—')],
-    ['Postings typed bytes', String(b.postings?.totalTypedBytes ?? '—')],
-    ['Term index estimated bytes', String(b.termIndex?.estimatedBytes ?? '—')],
-    ['Stored fields JSON bytes', String(b.documents?.storedFieldsJsonBytes ?? '—')],
-    ['Estimated structured bytes', String(b.estimatedStructuredBytes ?? '—')],
+    ['Terms / docs', `${fmtCount(b.termCount)} terms / ${fmtCount(b.documentCount)} docs`, `nextId ${fmtCount(b.nextId)}`],
+    ['Postings typed arrays', fmtBytes(b.postings?.totalTypedBytes), postingsDetail],
+    ['Term index estimate', fmtBytes(b.termIndex?.estimatedBytes ?? b.radixTree?.estimatedBytes), `${fmtCount(b.termIndex?.nodeCount ?? b.radixTree?.mapNodeCount)} nodes`],
+    ['Document metadata', fmtBytes((b.documents?.fieldLengthMatrixBytes ?? 0) + (b.documents?.storedFieldsJsonBytes ?? 0)), docsDetail],
+    ['Estimated structured total', fmtBytes(b.estimatedStructuredBytes), 'postings + term index + document metadata'],
+  ].filter(([, , value]) => value !== '—')
+    .map(([area, metric, value]) => `| ${area} | ${metric} | ${value} |`)
+  return mdTable(['Area', 'Size / count', 'Detail'], rows)
+}
+
+function scenarioConfigTable (scenario) {
+  const capped = scenario.benchmarkRuns
+    ? `${fmtValue(scenario.benchmarkRuns.effective)}/${fmtValue(scenario.benchmarkRuns.requested)} runs (${scenario.benchmarkRuns.reason})`
+    : null
+  const heap = scenario.heapSkipped ? `heap skipped: ${scenario.heapSkipped}` : null
+  const rows = [
+    ['Corpus', `${fmtCount(scenario.documentCount)} docs; fields ${fmtList(scenario.fields)}; storeFields ${fmtList(scenario.storeFields)}`],
+    ['Measurement notes', [capped, heap].filter(Boolean).join('; ') || 'standard run'],
   ].map(([metric, value]) => `| ${metric} | ${value} |`)
-  return mdTable(['Breakdown', 'Value'], rows)
+  return mdTable(['Property', 'Value'], rows)
+}
+
+function diagnosticsBlock (scenario) {
+  const drift = scoreDriftTable(scenario)
+  return `<details>
+<summary>Diagnostics</summary>
+
+#### Search-level breakdown
+
+${searchLevelsTable(scenario)}
+${drift ? `#### Score drift\n\n${drift}\n` : ''}#### Memory structure
+
+${memoryBreakdownTable(scenario)}
+</details>
+`
+}
+
+function scenarioSummaryLine (scenario) {
+  return [
+    `${fmtCount(scenario.documentCount)} docs`,
+    `${fmtSaving(scenario.summary?.heapFrozenVsMutableSavingPct)} RAM`,
+    `${fmtSaving(scenario.summary?.diskBinaryVsJsonSavingPct)} binary`,
+    `${fmtFaster(scenario.summary?.searchFrozenP50AvgGainPct)} search p50`,
+  ].filter((part) => !part.includes('—')).join(' · ')
 }
 
 function scenarioSection (scenario) {
-  const fields = scenario.fields?.join(', ') || '—'
-  const store = scenario.storeFields?.length ? scenario.storeFields.join(', ') : '—'
-  return `## ${scenario.name} (\`${scenario.id}\`)
+  const anchor = scenarioAnchor(scenario)
+  const summary = htmlEscape(scenarioSummaryLine(scenario))
+  return `<a id="${anchor}"></a>
+<details>
+<summary><strong>${htmlEscape(scenario.name)}</strong> (<code>${htmlEscape(scenario.id)}</code>) · ${summary}</summary>
 
-${scenario.documentCount?.toLocaleString('en-US') ?? '—'} documents · fields: ${fields} · storeFields: ${store}
+### At a glance
 
-### Summary
+${scenarioConfigTable(scenario)}
+### Performance
 
-${summaryMetricsTable(scenario)}
-### Indexing & migrate
-
-${indexingTable(scenario)}
-### Disk
-
-${diskTable(scenario)}
-### Load
-
-${loadTable(scenario)}
-### Memory / heap
-
-${heapTable(scenario)}
+${performanceTable(scenario)}
 ### Search
 
 ${searchTable(scenario)}
-### Search levels
 
-${searchLevelsTable(scenario)}
-### Score drift
-
-${scoreDriftTable(scenario)}
-### Structured memory breakdown
-
-${memoryBreakdownTable(scenario)}
+${diagnosticsBlock(scenario)}
+</details>
 `
 }
 
@@ -365,7 +396,8 @@ ${END}`
 }
 
 function buildDetailedReferenceDocument () {
-  const { captured, node, minisearch, packageVersion, runs, commitShort, baselineRel, heapNote } = captureMeta()
+  const meta = captureMeta()
+  const { captured, node, minisearch, packageVersion, runs, commitShort, baselineRel, heapNote } = meta
   const { wins, total } = aggregateSearchWins()
   const allSummaryRows = payload.scenarios.map(summaryRow).join('\n')
   const scenarioSections = payload.scenarios.map(scenarioSection).join('\n---\n\n')
@@ -378,6 +410,20 @@ Package **${packageVersion}** · MiniSearch **${minisearch}** · captured **${ca
 
 Across this full run, frozen wins on **${wins}/${total}** search cases. ${heapNote}
 
+## How to read this
+
+- The summary table links to one collapsible section per scenario.
+- \`Index RAM\` is total resident index memory when heap data is available: \`heapUsed + external\`.
+- \`Load JSON\` is \`MiniSearch.loadJSON\` from the same \`toJSON\` snapshot. \`Load binary\` is \`FrozenMiniSearch.loadBinarySync\` after \`saveBinarySync\`.
+- \`Freeze import\` is the one-time \`FrozenMiniSearch.fromJSON\` migration path, not the hot binary reload path.
+- Detailed search tables use \`Frozen p50 delta\`: negative means frozen was faster/lower, positive means frozen was slower/higher.
+- \`Below floor\` marks sub-0.1 ms probe rows where percentage ratios are noisier than absolute timings.
+- Search levels are benchmark-only internals: L0 = term-index lookup, L1 = frozen \`executeQuery\`, L2 = full paired \`search()\`.
+
+## Run context
+
+${runContextTable(meta)}
+
 ## Summary — all scenarios
 
 | Scenario | Docs | Index RAM | Binary size | Load JSON | Load binary | Freeze import | Search p50 |
@@ -385,6 +431,8 @@ Across this full run, frozen wins on **${wins}/${total}** search cases. ${heapNo
 ${allSummaryRows}
 
 ---
+
+## Scenario details
 
 ${scenarioSections}
 See [benchmarks/README.md](README.md) for harness profiles, surfaces, and how to refresh this file (\`pnpm bench:reference:update\`).

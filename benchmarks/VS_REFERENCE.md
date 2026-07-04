@@ -6,1144 +6,788 @@ Package **1.8.0** · MiniSearch **7.2.0** · captured **2026-07-04** on Node **v
 
 Across this full run, frozen wins on **27/27** search cases. Heap protocol v4 (isolated scenario processes, in-process trials, median+MAD; totalResident = heapUsed + external on both sides) — trend, not exact accounting. Index RAM column shows — for scenarios outside the heap allowlist.
 
+## How to read this
+
+- The summary table links to one collapsible section per scenario.
+- `Index RAM` is total resident index memory when heap data is available: `heapUsed + external`.
+- `Load JSON` is `MiniSearch.loadJSON` from the same `toJSON` snapshot. `Load binary` is `FrozenMiniSearch.loadBinarySync` after `saveBinarySync`.
+- `Freeze import` is the one-time `FrozenMiniSearch.fromJSON` migration path, not the hot binary reload path.
+- Detailed search tables use `Frozen p50 delta`: negative means frozen was faster/lower, positive means frozen was slower/higher.
+- `Below floor` marks sub-0.1 ms probe rows where percentage ratios are noisier than absolute timings.
+- Search levels are benchmark-only internals: L0 = term-index lookup, L1 = frozen `executeQuery`, L2 = full paired `search()`.
+
+## Run context
+
+| Context | Value |
+| --- | --- |
+| Baseline | `benchmarks/baselines/reference.json` @ `1cdc405` |
+| Runtime | Node v24.16.0; MiniSearch 7.2.0; 3 requested runs |
+| Surfaces | `search`, `search-levels`, `memory`, `build`, `save`, `load`, `migrate`, `drift` |
+| Search protocol | v2; paired hrtime; batch target 3 ms; 20/50 iterations |
+| Heap protocol | v4; 3 trials; totalResident = heapUsed + external; isolated per scenario |
+
+
 ## Summary — all scenarios
 
 | Scenario | Docs | Index RAM | Binary size | Load JSON | Load binary | Freeze import | Search p50 |
 |----------|-----:|-----------|------------:|----------:|------------:|--------------:|-----------:|
-| `divina-storeFields` | 14,097 | 0.82 vs 16.1 MB (~95% less) | ~71% less | 92 ms | 41 ms | 96 ms | ~30% faster |
-| `divina-indexOnly` | 14,097 | 0.71 vs 14.9 MB (~95% less) | ~75% less | 115 ms | 19 ms | 112 ms | ~30% faster |
-| `extreme-giantVocabulary` | 50,000 | 1.82 vs 47.2 MB (~96% less) | ~81% less | 264 ms | 49 ms | 245 ms | ~46% faster |
-| `extreme-largeDocuments` | 5,000 | 0.29 vs 6.6 MB (~96% less) | ~99% less | 46 ms | 86 ms | 40 ms | ~46% faster |
-| `extreme-manyFields` | 2,000 | 0.41 vs 7.1 MB (~94% less) | ~92% less | 34 ms | 3.6 ms | 67 ms | ~48% faster |
-| `extreme-highFrequency` | 10,000 | 0.40 vs 7.4 MB (~95% less) | ~92% less | 30 ms | 2.8 ms | 39 ms | ~43% faster |
-| `extreme-overflowFrequency` | 2,000 | 0.05 vs 0.7 MB (~93% less) | ~90% less | 3.1 ms | 1.1 ms | 7.5 ms | ~28% faster |
-| `denseNumericIds-100k` | 100,000 | 4.91 vs 91.3 MB (~95% less) | ~73% less | 524 ms | 55 ms | 398 ms | ~30% faster |
-| `genericStringIds-100k` | 100,000 | 4.90 vs 91.3 MB (~95% less) | ~74% less | 569 ms | 75 ms | 403 ms | ~27% faster |
-| `sparseFields-50kTerms-20Fields` | 5,000 | 0.28 vs 5.2 MB (~95% less) | ~91% less | 25 ms | 4.0 ms | 57 ms | ~37% faster |
-| `docIdUint16Boundary-65535` | 65,535 | 2.89 vs 58.6 MB (~95% less) | ~77% less | 356 ms | 45 ms | 269 ms | ~55% faster |
-| `docIdUint16Boundary-65536` | 65,536 | 3.51 vs 58.6 MB (~94% less) | ~74% less | 390 ms | 44 ms | 283 ms | ~54% faster |
-| `saveBinaryAfterNoTerms` | 50,000 | — | ~81% less | 269 ms | 32 ms | 303 ms | ~3% faster |
+| [`divina-storeFields`](#scenario-divina-storeFields) | 14,097 | 0.82 vs 16.1 MB (~95% less) | ~71% less | 92 ms | 41 ms | 96 ms | ~30% faster |
+| [`divina-indexOnly`](#scenario-divina-indexOnly) | 14,097 | 0.71 vs 14.9 MB (~95% less) | ~75% less | 115 ms | 19 ms | 112 ms | ~30% faster |
+| [`extreme-giantVocabulary`](#scenario-extreme-giantVocabulary) | 50,000 | 1.82 vs 47.2 MB (~96% less) | ~81% less | 264 ms | 49 ms | 245 ms | ~46% faster |
+| [`extreme-largeDocuments`](#scenario-extreme-largeDocuments) | 5,000 | 0.29 vs 6.6 MB (~96% less) | ~99% less | 46 ms | 86 ms | 40 ms | ~46% faster |
+| [`extreme-manyFields`](#scenario-extreme-manyFields) | 2,000 | 0.41 vs 7.1 MB (~94% less) | ~92% less | 34 ms | 3.6 ms | 67 ms | ~48% faster |
+| [`extreme-highFrequency`](#scenario-extreme-highFrequency) | 10,000 | 0.40 vs 7.4 MB (~95% less) | ~92% less | 30 ms | 2.8 ms | 39 ms | ~43% faster |
+| [`extreme-overflowFrequency`](#scenario-extreme-overflowFrequency) | 2,000 | 0.05 vs 0.7 MB (~93% less) | ~90% less | 3.1 ms | 1.1 ms | 7.5 ms | ~28% faster |
+| [`denseNumericIds-100k`](#scenario-denseNumericIds-100k) | 100,000 | 4.91 vs 91.3 MB (~95% less) | ~73% less | 524 ms | 55 ms | 398 ms | ~30% faster |
+| [`genericStringIds-100k`](#scenario-genericStringIds-100k) | 100,000 | 4.90 vs 91.3 MB (~95% less) | ~74% less | 569 ms | 75 ms | 403 ms | ~27% faster |
+| [`sparseFields-50kTerms-20Fields`](#scenario-sparseFields-50kTerms-20Fields) | 5,000 | 0.28 vs 5.2 MB (~95% less) | ~91% less | 25 ms | 4.0 ms | 57 ms | ~37% faster |
+| [`docIdUint16Boundary-65535`](#scenario-docIdUint16Boundary-65535) | 65,535 | 2.89 vs 58.6 MB (~95% less) | ~77% less | 356 ms | 45 ms | 269 ms | ~55% faster |
+| [`docIdUint16Boundary-65536`](#scenario-docIdUint16Boundary-65536) | 65,536 | 3.51 vs 58.6 MB (~94% less) | ~74% less | 390 ms | 44 ms | 283 ms | ~54% faster |
+| [`saveBinaryAfterNoTerms`](#scenario-saveBinaryAfterNoTerms) | 50,000 | — | ~81% less | 269 ms | 32 ms | 303 ms | ~3% faster |
 
 ---
 
-## Divina Commedia — with storeFields (`divina-storeFields`)
+## Scenario details
 
-14,097 documents · fields: txt · storeFields: txt
+<a id="scenario-divina-storeFields"></a>
+<details>
+<summary><strong>Divina Commedia — with storeFields</strong> (<code>divina-storeFields</code>) · 14,097 docs · ~95% less RAM · ~71% less binary · ~30% faster search p50</summary>
 
-### Summary
+### At a glance
 
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~71% less |
-| Load binary vs JSON | ~55% less |
-| Search frozen p50 avg gain | ~30% faster |
-| Heap frozen vs mutable saving | ~95% less |
+| Corpus | 14,097 docs; fields `txt`; storeFields `txt` |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 135 ms |
-| fromDocuments | 137 ms |
-| toJSON (migrate) | 103 ms |
-| freeze import (fromJSON) | 96 ms |
-| JSON serialize (save) | 126 ms |
-| saveBinary | 124 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 2.308 MB | — |
-| Binary snapshot | 0.665 MB | ~71% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 92 ms | — |
-| FrozenMiniSearch.loadBinarySync | 41 ms | ~55% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 16.120 MB | heap 16.120 MB |
-| Frozen total resident | 0.821 MB | heap 0.282 MB |
-| Frozen vs mutable saving | 94.9% | heap-only 98.3% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 0.539 MB | arrayBuffers 0.539 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.333 MB |
+| Build mutable addAll | 135 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 137 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 103 ms + 96 ms | MiniSearch snapshot migration |
+| Save snapshot | 126 ms JSON / 124 ms binary | binary MSv5 |
+| Snapshot size | 2.308 MB JSON / 0.665 MB binary | ~71% less |
+| Load snapshot | 92 ms JSON / 41 ms binary | ~55% less |
+| Resident index RAM | 0.82 MB frozen vs 16.1 MB mutable (~95% less) | heap-only ~98% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `inferno` | 97 | 50 | 17.2 µs | 13.1 µs | 28.2 µs | 22.3 µs | 0.69 | -23.8% |
-| AND | `inferno paradiso` | 108 | 50 | 18.7 µs | 16.2 µs | 32.7 µs | 33.0 µs | 0.86 | -13.4% |
-| AND+prefix | `infe para` | 43 | 50 | 47.3 µs | 31.7 µs | 84.6 µs | 56.9 µs | 0.65 | -33.0% |
-| AND+fuzzy | `infern paradis` | 23 | 20 | 0.13 ms | 84.7 µs | 0.17 ms | 0.13 ms | 0.64 | -35.2% |
-| AND_NOT | `inferno paradiso` | 111 | 50 | 22.2 µs | 17.4 µs | 32.2 µs | 31.2 µs | 0.78 | -21.6% |
-| AND_NOT+prefix | `infe para` | 28 | 20 | 52.6 µs | 31.2 µs | 0.10 ms | 0.34 ms | 0.62 | -40.7% |
-| prefix | `infe` | 59 | 50 | 36.5 µs | 23.4 µs | 47.9 µs | 34.3 µs | 0.64 | -35.9% |
-| fuzzy | `infern` | 41 | 50 | 59.1 µs | 39.2 µs | 90.8 µs | 56.3 µs | 0.64 | -33.7% |
+| exact | `inferno` | 17.2 µs | 13.1 µs | 28.2 µs | 22.3 µs | 0.69 | -23.8% | 97×50 | yes |
+| AND | `inferno paradiso` | 18.7 µs | 16.2 µs | 32.7 µs | 33.0 µs | 0.86 | -13.4% | 108×50 | yes |
+| AND+prefix | `infe para` | 47.3 µs | 31.7 µs | 84.6 µs | 56.9 µs | 0.65 | -33.0% | 43×50 | yes |
+| AND+fuzzy | `infern paradis` | 0.13 ms | 84.7 µs | 0.17 ms | 0.13 ms | 0.64 | -35.2% | 23×20 | no |
+| AND_NOT | `inferno paradiso` | 22.2 µs | 17.4 µs | 32.2 µs | 31.2 µs | 0.78 | -21.6% | 111×50 | yes |
+| AND_NOT+prefix | `infe para` | 52.6 µs | 31.2 µs | 0.10 ms | 0.34 ms | 0.62 | -40.7% | 28×20 | yes |
+| prefix | `infe` | 36.5 µs | 23.4 µs | 47.9 µs | 34.3 µs | 0.64 | -35.9% | 59×50 | yes |
+| fuzzy | `infern` | 59.1 µs | 39.2 µs | 90.8 µs | 56.3 µs | 0.64 | -33.7% | 41×50 | yes |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 500 ns | 500 ns | 700 ns | 700 ns | 0.90 | 0.0% | 97 |
-| exact | L1 | — | 11.4 µs | — | 20.2 µs | — | — | 97 |
-| exact | L2 | 15.1 µs | 9.7 µs | 25.2 µs | 15.3 µs | 0.65 | -35.8% | 97 |
-| AND | L0 | 400 ns | 400 ns | 700 ns | 700 ns | 0.98 | 0.0% | 108 |
-| AND | L1 | — | 22.8 µs | — | 36.7 µs | — | — | 108 |
-| AND | L2 | 17.0 µs | 14.7 µs | 33.9 µs | 24.3 µs | 0.86 | -13.5% | 108 |
-| AND+prefix | L0 | 300 ns | 200 ns | 500 ns | 300 ns | 0.76 | -33.3% | 43 |
-| AND+prefix | L1 | — | 31.2 µs | — | 48.0 µs | — | — | 43 |
-| AND+prefix | L2 | 41.9 µs | 27.9 µs | 76.7 µs | 51.9 µs | 0.66 | -33.4% | 43 |
-| AND+fuzzy | L0 | 300 ns | 200 ns | 300 ns | 400 ns | 0.74 | -33.3% | 23 |
-| AND+fuzzy | L1 | — | 79.1 µs | — | 0.12 ms | — | — | 23 |
-| AND+fuzzy | L2 | 0.12 ms | 79.5 µs | 0.15 ms | 0.10 ms | 0.64 | -35.9% | 23 |
-| AND_NOT | L0 | 300 ns | 200 ns | 500 ns | 400 ns | 0.71 | -33.3% | 111 |
-| AND_NOT | L1 | — | 17.3 µs | — | 21.2 µs | — | — | 111 |
-| AND_NOT | L2 | 22.6 µs | 17.0 µs | 47.7 µs | 28.9 µs | 0.76 | -24.8% | 111 |
-| AND_NOT+prefix | L0 | 300 ns | 200 ns | 300 ns | 200 ns | 0.78 | -33.3% | 28 |
-| AND_NOT+prefix | L1 | — | 31.5 µs | — | 46.0 µs | — | — | 28 |
-| AND_NOT+prefix | L2 | 52.5 µs | 31.5 µs | 81.0 µs | 0.32 ms | 0.61 | -40.0% | 28 |
-| prefix | L0 | 300 ns | 200 ns | 300 ns | 300 ns | 0.76 | -33.3% | 59 |
-| prefix | L1 | — | 21.3 µs | — | 33.3 µs | — | — | 59 |
-| prefix | L2 | 36.0 µs | 23.1 µs | 42.1 µs | 31.0 µs | 0.64 | -35.8% | 59 |
-| fuzzy | L0 | 300 ns | 200 ns | 500 ns | 200 ns | 0.73 | -33.3% | 41 |
-| fuzzy | L1 | — | 36.4 µs | — | 57.5 µs | — | — | 41 |
-| fuzzy | L2 | 60.0 µs | 39.3 µs | 91.8 µs | 58.3 µs | 0.64 | -34.5% | 41 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `inferno` | 500 ns → 500 ns | 11.4 µs | 15.1 µs → 9.7 µs | 0.65 | -35.8% | 97 |
+| AND | `inferno` | 400 ns → 400 ns | 22.8 µs | 17.0 µs → 14.7 µs | 0.86 | -13.5% | 108 |
+| AND+prefix | `infe` | 300 ns → 200 ns | 31.2 µs | 41.9 µs → 27.9 µs | 0.66 | -33.4% | 43 |
+| AND+fuzzy | `infern` | 300 ns → 200 ns | 79.1 µs | 0.12 ms → 79.5 µs | 0.64 | -35.9% | 23 |
+| AND_NOT | `inferno` | 300 ns → 200 ns | 17.3 µs | 22.6 µs → 17.0 µs | 0.76 | -24.8% | 111 |
+| AND_NOT+prefix | `infe` | 300 ns → 200 ns | 31.5 µs | 52.5 µs → 31.5 µs | 0.61 | -40.0% | 28 |
+| prefix | `infe` | 300 ns → 200 ns | 21.3 µs | 36.0 µs → 23.1 µs | 0.64 | -35.8% | 59 |
+| fuzzy | `infern` | 300 ns → 200 ns | 36.4 µs | 60.0 µs → 39.3 µs | 0.64 | -34.5% | 41 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 13497 |
-| Documents | 14097 |
-| nextId | 14097 |
-| Postings typed bytes | 377490 |
-| Term index estimated bytes | 237991 |
-| Stored fields JSON bytes | 672538 |
-| Estimated structured bytes | 1302120 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 13,497 terms / 14,097 docs | nextId 14,097 |
+| Postings typed arrays | 368.6 KiB (377,490 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 232.4 KiB (237,991 bytes) | 17,392 nodes |
+| Document metadata | 670.5 KiB (686,635 bytes) | lazy-map, 656.8 KiB (672,538 bytes) stored fields |
+| Estimated structured total | 1.24 MiB (1,302,120 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Divina Commedia — index only (`divina-indexOnly`)
+<a id="scenario-divina-indexOnly"></a>
+<details>
+<summary><strong>Divina Commedia — index only</strong> (<code>divina-indexOnly</code>) · 14,097 docs · ~95% less RAM · ~75% less binary · ~30% faster search p50</summary>
 
-14,097 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~75% less |
-| Load binary vs JSON | ~83% less |
-| Search frozen p50 avg gain | ~30% faster |
-| Heap frozen vs mutable saving | ~95% less |
+| Corpus | 14,097 docs; fields `txt`; storeFields — |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 169 ms |
-| fromDocuments | 131 ms |
-| toJSON (migrate) | 119 ms |
-| freeze import (fromJSON) | 112 ms |
-| JSON serialize (save) | 141 ms |
-| saveBinary | 57 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 1.556 MB | — |
-| Binary snapshot | 0.394 MB | ~75% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 115 ms | — |
-| FrozenMiniSearch.loadBinarySync | 19 ms | ~83% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 14.931 MB | heap 14.931 MB |
-| Frozen total resident | 0.711 MB | heap 0.172 MB |
-| Frozen vs mutable saving | 95.2% | heap-only 98.8% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 0.539 MB | arrayBuffers 0.539 MB |
-| MAD (mutable total) | 0.001 MB | frozen 0.223 MB |
+| Build mutable addAll | 169 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 131 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 119 ms + 112 ms | MiniSearch snapshot migration |
+| Save snapshot | 141 ms JSON / 57 ms binary | binary MSv5 |
+| Snapshot size | 1.556 MB JSON / 0.394 MB binary | ~75% less |
+| Load snapshot | 115 ms JSON / 19 ms binary | ~83% less |
+| Resident index RAM | 0.71 MB frozen vs 14.9 MB mutable (~95% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `inferno` | 177 | 50 | 15.0 µs | 10.7 µs | 28.3 µs | 23.7 µs | 0.77 | -28.7% |
-| prefix | `infe` | 30 | 20 | 49.6 µs | 34.1 µs | 87.3 µs | 56.4 µs | 0.72 | -31.3% |
+| exact | `inferno` | 15.0 µs | 10.7 µs | 28.3 µs | 23.7 µs | 0.77 | -28.7% | 177×50 | yes |
+| prefix | `infe` | 49.6 µs | 34.1 µs | 87.3 µs | 56.4 µs | 0.72 | -31.3% | 30×20 | yes |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 400 ns | 300 ns | 600 ns | 600 ns | 0.67 | -25.0% | 177 |
-| exact | L1 | — | 8.3 µs | — | 17.4 µs | — | — | 177 |
-| exact | L2 | 15.5 µs | 11.0 µs | 26.7 µs | 19.9 µs | 0.72 | -29.0% | 177 |
-| prefix | L0 | 300 ns | 300 ns | 500 ns | 500 ns | 1.04 | 0.0% | 30 |
-| prefix | L1 | — | 32.7 µs | — | 76.2 µs | — | — | 30 |
-| prefix | L2 | 38.8 µs | 23.7 µs | 62.9 µs | 41.2 µs | 0.59 | -38.9% | 30 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `inferno` | 400 ns → 300 ns | 8.3 µs | 15.5 µs → 11.0 µs | 0.72 | -29.0% | 177 |
+| prefix | `infe` | 300 ns → 300 ns | 32.7 µs | 38.8 µs → 23.7 µs | 0.59 | -38.9% | 30 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 13497 |
-| Documents | 14097 |
-| nextId | 14097 |
-| Postings typed bytes | 377490 |
-| Term index estimated bytes | 237991 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 629582 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 13,497 terms / 14,097 docs | nextId 14,097 |
+| Postings typed arrays | 368.6 KiB (377,490 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 232.4 KiB (237,991 bytes) | 17,392 nodes |
+| Document metadata | 13.8 KiB (14,097 bytes) | lazy-map |
+| Estimated structured total | 614.8 KiB (629,582 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Extreme — giant vocabulary (50k unique terms) (`extreme-giantVocabulary`)
+<a id="scenario-extreme-giantVocabulary"></a>
+<details>
+<summary><strong>Extreme — giant vocabulary (50k unique terms)</strong> (<code>extreme-giantVocabulary</code>) · 50,000 docs · ~96% less RAM · ~81% less binary · ~46% faster search p50</summary>
 
-50,000 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~81% less |
-| Load binary vs JSON | ~82% less |
-| Search frozen p50 avg gain | ~46% faster |
-| Heap frozen vs mutable saving | ~96% less |
+| Corpus | 50,000 docs; fields `txt`; storeFields — |
+| Measurement notes | 1/3 runs (very expensive calibrated search (105.9 ms >= 50 ms)) |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 281 ms |
-| fromDocuments | 231 ms |
-| toJSON (migrate) | 210 ms |
-| freeze import (fromJSON) | 245 ms |
-| JSON serialize (save) | 323 ms |
-| saveBinary | 76 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 4.207 MB | — |
-| Binary snapshot | 0.800 MB | ~81% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 264 ms | — |
-| FrozenMiniSearch.loadBinarySync | 49 ms | ~82% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 47.201 MB | heap 47.201 MB |
-| Frozen total resident | 1.822 MB | heap 0.439 MB |
-| Frozen vs mutable saving | 96.1% | heap-only 99.1% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 1.383 MB | arrayBuffers 1.383 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.001 MB |
+| Build mutable addAll | 281 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 231 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 210 ms + 245 ms | MiniSearch snapshot migration |
+| Save snapshot | 323 ms JSON / 76 ms binary | binary MSv5 |
+| Snapshot size | 4.207 MB JSON / 0.800 MB binary | ~81% less |
+| Load snapshot | 264 ms JSON / 49 ms binary | ~82% less |
+| Resident index RAM | 1.82 MB frozen vs 47.2 MB mutable (~96% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `unique12345` | 256 | 50 | 6.5 µs | 4.4 µs | 15.4 µs | 9.7 µs | 0.69 | -31.5% |
-| AND+prefix | `unique1 common` | 1 | 20 | 141.7 ms | 97.6 ms | 183.5 ms | 170.7 ms | 0.68 | -31.1% |
-| AND_NOT | `unique1 common` | 4 | 20 | 41.8 ms | 34.1 µs | 61.2 ms | 45.9 µs | 0.00 | -99.9% |
-| prefix | `unique1` | 1 | 20 | 45.7 ms | 37.1 ms | 74.3 ms | 92.6 ms | 0.76 | -18.8% |
+| exact | `unique12345` | 6.5 µs | 4.4 µs | 15.4 µs | 9.7 µs | 0.69 | -31.5% | 256×50 | yes |
+| AND+prefix | `unique1 common` | 141.7 ms | 97.6 ms | 183.5 ms | 170.7 ms | 0.68 | -31.1% | 1×20 | no |
+| AND_NOT | `unique1 common` | 41.8 ms | 34.1 µs | 61.2 ms | 45.9 µs | 0.00 | -99.9% | 4×20 | no |
+| prefix | `unique1` | 45.7 ms | 37.1 ms | 74.3 ms | 92.6 ms | 0.76 | -18.8% | 1×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 800 ns | 500 ns | 900 ns | 900 ns | 0.61 | -39.9% | 256 |
-| exact | L1 | — | 4.4 µs | — | 9.7 µs | — | — | 256 |
-| exact | L2 | 4.6 µs | 2.6 µs | 6.6 µs | 4.7 µs | 0.59 | -42.3% | 256 |
-| AND+prefix | L0 | 400 ns | 500 ns | 900 ns | 800 ns | 1.28 | 35.8% | 1 |
-| AND+prefix | L1 | — | 51.8 ms | — | 75.4 ms | — | — | 1 |
-| AND+prefix | L2 | 134.7 ms | 72.3 ms | 191.0 ms | 101.1 ms | 0.56 | -46.3% | 1 |
-| AND_NOT | L0 | 300 ns | 400 ns | 700 ns | 4.7 µs | 1.39 | 41.2% | 4 |
-| AND_NOT | L1 | — | 27.2 µs | — | 42.0 µs | — | — | 4 |
-| AND_NOT | L2 | 41.4 ms | 29.8 µs | 47.7 ms | 47.2 µs | 0.00 | -99.9% | 4 |
-| prefix | L0 | 300 ns | 300 ns | 600 ns | 400 ns | 0.97 | 1.5% | 1 |
-| prefix | L1 | — | 27.0 ms | — | 126.3 ms | — | — | 1 |
-| prefix | L2 | 47.7 ms | 36.8 ms | 77.0 ms | 69.1 ms | 0.76 | -22.8% | 1 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `unique12345` | 800 ns → 500 ns | 4.4 µs | 4.6 µs → 2.6 µs | 0.59 | -42.3% | 256 |
+| AND+prefix | `unique1` | 400 ns → 500 ns | 51.8 ms | 134.7 ms → 72.3 ms | 0.56 | -46.3% | 1 |
+| AND_NOT | `unique1` | 300 ns → 400 ns | 27.2 µs | 41.4 ms → 29.8 µs | 0.00 | -99.9% | 4 |
+| prefix | `unique1` | 300 ns → 300 ns | 27.0 ms | 47.7 ms → 36.8 ms | 0.76 | -22.8% | 1 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 50003 |
-| Documents | 50000 |
-| nextId | 50000 |
-| Postings typed bytes | 900018 |
-| Term index estimated bytes | 600089 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 1550111 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 50,003 terms / 50,000 docs | nextId 50,000 |
+| Postings typed arrays | 878.9 KiB (900,018 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 586.0 KiB (600,089 bytes) | 50,005 nodes |
+| Document metadata | 48.8 KiB (50,000 bytes) | identity |
+| Estimated structured total | 1.48 MiB (1,550,111 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Extreme — large documents (5k × ~5KB, storeFields) (`extreme-largeDocuments`)
+<a id="scenario-extreme-largeDocuments"></a>
+<details>
+<summary><strong>Extreme — large documents (5k × ~5KB, storeFields)</strong> (<code>extreme-largeDocuments</code>) · 5,000 docs · ~96% less RAM · ~99% less binary · ~46% faster search p50</summary>
 
-5,000 documents · fields: txt · storeFields: txt
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~99% less |
-| Load binary vs JSON | -88% |
-| Search frozen p50 avg gain | ~46% faster |
-| Heap frozen vs mutable saving | ~96% less |
+| Corpus | 5,000 docs; fields `txt`; storeFields `txt` |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 1299 ms |
-| fromDocuments | 1238 ms |
-| toJSON (migrate) | 35 ms |
-| freeze import (fromJSON) | 40 ms |
-| JSON serialize (save) | 101 ms |
-| saveBinary | 437 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 24.341 MB | — |
-| Binary snapshot | 0.139 MB | ~99% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 46 ms | — |
-| FrozenMiniSearch.loadBinarySync | 86 ms | -88% |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 6.568 MB | heap 6.568 MB |
-| Frozen total resident | 0.293 MB | heap 0.093 MB |
-| Frozen vs mutable saving | 95.5% | heap-only 98.6% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 0.200 MB | arrayBuffers 0.200 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.002 MB |
+| Build mutable addAll | 1299 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 1238 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 35 ms + 40 ms | MiniSearch snapshot migration |
+| Save snapshot | 101 ms JSON / 437 ms binary | binary MSv5 |
+| Snapshot size | 24.341 MB JSON / 0.139 MB binary | ~99% less |
+| Load snapshot | 46 ms JSON / 86 ms binary | ~88% slower |
+| Resident index RAM | 0.29 MB frozen vs 6.6 MB mutable (~96% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `lorem` | 1 | 20 | 4.07 ms | 2.15 ms | 6.77 ms | 5.04 ms | 0.52 | -47.1% |
-| AND | `lorem ipsum` | 1 | 20 | 9.16 ms | 5.12 ms | 19.9 ms | 18.4 ms | 0.57 | -44.1% |
+| exact | `lorem` | 4.07 ms | 2.15 ms | 6.77 ms | 5.04 ms | 0.52 | -47.1% | 1×20 | no |
+| AND | `lorem ipsum` | 9.16 ms | 5.12 ms | 19.9 ms | 18.4 ms | 0.57 | -44.1% | 1×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 100 ns | 400 ns | 300 ns | 500 ns | 3.15 | 300.0% | 1 |
-| exact | L1 | — | 1.66 ms | — | 3.69 ms | — | — | 1 |
-| exact | L2 | 4.54 ms | 2.10 ms | 7.14 ms | 5.44 ms | 0.51 | -53.6% | 1 |
-| AND | L0 | 100 ns | 400 ns | 300 ns | 500 ns | 3.10 | 300.0% | 1 |
-| AND | L1 | — | 4.69 ms | — | 26.7 ms | — | — | 1 |
-| AND | L2 | 9.77 ms | 5.03 ms | 15.8 ms | 18.5 ms | 0.61 | -48.5% | 1 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `lorem` | 100 ns → 400 ns | 1.66 ms | 4.54 ms → 2.10 ms | 0.51 | -53.6% | 1 |
+| AND | `lorem` | 100 ns → 400 ns | 4.69 ms | 9.77 ms → 5.03 ms | 0.61 | -48.5% | 1 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 5008 |
-| Documents | 5000 |
-| nextId | 5000 |
-| Postings typed bytes | 155032 |
-| Term index estimated bytes | 60211 |
-| Stored fields JSON bytes | 24838890 |
-| Estimated structured bytes | 25059137 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 5,008 terms / 5,000 docs | nextId 5,000 |
+| Postings typed arrays | 151.4 KiB (155,032 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 58.8 KiB (60,211 bytes) | 5,012 nodes |
+| Document metadata | 23.69 MiB (24,843,890 bytes) | identity, 23.69 MiB (24,838,890 bytes) stored fields |
+| Estimated structured total | 23.90 MiB (25,059,137 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Extreme — many fields (2k docs × 10 fields) (`extreme-manyFields`)
+<a id="scenario-extreme-manyFields"></a>
+<details>
+<summary><strong>Extreme — many fields (2k docs × 10 fields)</strong> (<code>extreme-manyFields</code>) · 2,000 docs · ~94% less RAM · ~92% less binary · ~48% faster search p50</summary>
 
-2,000 documents · fields: f0, f1, f2, f3, f4, f5, f6, f7, f8, f9 · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~92% less |
-| Load binary vs JSON | ~89% less |
-| Search frozen p50 avg gain | ~48% faster |
-| Heap frozen vs mutable saving | ~94% less |
+| Corpus | 2,000 docs; fields `f0`, `f1`, `f2`, `f3`, `f4`, `f5`, `f6`, `f7`, `f8`, `f9`; storeFields — |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 62 ms |
-| fromDocuments | 60 ms |
-| toJSON (migrate) | 60 ms |
-| freeze import (fromJSON) | 67 ms |
-| JSON serialize (save) | 257 ms |
-| saveBinary | 7.2 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 0.854 MB | — |
-| Binary snapshot | 0.066 MB | ~92% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 34 ms | — |
-| FrozenMiniSearch.loadBinarySync | 3.6 ms | ~89% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 7.085 MB | heap 7.085 MB |
-| Frozen total resident | 0.415 MB | heap 0.033 MB |
-| Frozen vs mutable saving | 94.1% | heap-only 99.5% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 0.382 MB | arrayBuffers 0.382 MB |
-| MAD (mutable total) | 0.004 MB | frozen 0.008 MB |
+| Build mutable addAll | 62 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 60 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 60 ms + 67 ms | MiniSearch snapshot migration |
+| Save snapshot | 257 ms JSON / 7.2 ms binary | binary MSv5 |
+| Snapshot size | 0.854 MB JSON / 0.066 MB binary | ~92% less |
+| Load snapshot | 34 ms JSON / 3.6 ms binary | ~89% less |
+| Resident index RAM | 0.41 MB frozen vs 7.1 MB mutable (~94% less) | heap-only ~100% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `sharedterm` | 2 | 20 | 3.97 ms | 2.00 ms | 5.02 ms | 2.84 ms | 0.51 | -49.6% |
-| prefix | `share` | 2 | 20 | 4.17 ms | 2.27 ms | 5.64 ms | 3.25 ms | 0.55 | -45.4% |
+| exact | `sharedterm` | 3.97 ms | 2.00 ms | 5.02 ms | 2.84 ms | 0.51 | -49.6% | 2×20 | no |
+| prefix | `share` | 4.17 ms | 2.27 ms | 5.64 ms | 3.25 ms | 0.55 | -45.4% | 2×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 200 ns | 400 ns | 300 ns | 500 ns | 2.60 | 100.0% | 2 |
-| exact | L1 | — | 1.99 ms | — | 2.64 ms | — | — | 2 |
-| exact | L2 | 4.63 ms | 2.06 ms | 5.50 ms | 3.22 ms | 0.48 | -55.5% | 2 |
-| prefix | L0 | 100 ns | 300 ns | 200 ns | 400 ns | 2.41 | 200.0% | 2 |
-| prefix | L1 | — | 2.02 ms | — | 2.49 ms | — | — | 2 |
-| prefix | L2 | 4.07 ms | 2.27 ms | 4.85 ms | 3.07 ms | 0.56 | -44.3% | 2 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `sharedterm` | 200 ns → 400 ns | 1.99 ms | 4.63 ms → 2.06 ms | 0.48 | -55.5% | 2 |
+| prefix | `share` | 100 ns → 300 ns | 2.02 ms | 4.07 ms → 2.27 ms | 0.56 | -44.3% | 2 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 2012 |
-| Documents | 2000 |
-| nextId | 2000 |
-| Postings typed bytes | 360720 |
-| Term index estimated bytes | 24189 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 404949 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 2,012 terms / 2,000 docs | nextId 2,000 |
+| Postings typed arrays | 352.3 KiB (360,720 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 23.6 KiB (24,189 bytes) | 2,014 nodes |
+| Document metadata | 19.5 KiB (20,000 bytes) | identity |
+| Estimated structured total | 395.5 KiB (404,949 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Extreme — high-frequency terms (10k docs) (`extreme-highFrequency`)
+<a id="scenario-extreme-highFrequency"></a>
+<details>
+<summary><strong>Extreme — high-frequency terms (10k docs)</strong> (<code>extreme-highFrequency</code>) · 10,000 docs · ~95% less RAM · ~92% less binary · ~43% faster search p50</summary>
 
-10,000 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~92% less |
-| Load binary vs JSON | ~91% less |
-| Search frozen p50 avg gain | ~43% faster |
-| Heap frozen vs mutable saving | ~95% less |
+| Corpus | 10,000 docs; fields `txt`; storeFields — |
+| Measurement notes | 1/3 runs (expensive search-levels scenario (23.1 ms >= 20 ms)) |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 87 ms |
-| fromDocuments | 72 ms |
-| toJSON (migrate) | 22 ms |
-| freeze import (fromJSON) | 39 ms |
-| JSON serialize (save) | 38 ms |
-| saveBinary | 9.4 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 1.079 MB | — |
-| Binary snapshot | 0.088 MB | ~92% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 30 ms | — |
-| FrozenMiniSearch.loadBinarySync | 2.8 ms | ~91% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 7.370 MB | heap 7.370 MB |
-| Frozen total resident | 0.401 MB | heap 0.101 MB |
-| Frozen vs mutable saving | 94.6% | heap-only 98.6% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 0.300 MB | arrayBuffers 0.300 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.011 MB |
+| Build mutable addAll | 87 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 72 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 22 ms + 39 ms | MiniSearch snapshot migration |
+| Save snapshot | 38 ms JSON / 9.4 ms binary | binary MSv5 |
+| Snapshot size | 1.079 MB JSON / 0.088 MB binary | ~92% less |
+| Load snapshot | 30 ms JSON / 2.8 ms binary | ~91% less |
+| Resident index RAM | 0.40 MB frozen vs 7.4 MB mutable (~95% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `alpha` | 1 | 20 | 8.25 ms | 4.59 ms | 9.80 ms | 5.56 ms | 0.56 | -44.3% |
-| AND | `alpha beta` | 1 | 20 | 16.7 ms | 9.83 ms | 30.2 ms | 27.6 ms | 0.56 | -41.3% |
+| exact | `alpha` | 8.25 ms | 4.59 ms | 9.80 ms | 5.56 ms | 0.56 | -44.3% | 1×20 | no |
+| AND | `alpha beta` | 16.7 ms | 9.83 ms | 30.2 ms | 27.6 ms | 0.56 | -41.3% | 1×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 100 ns | 400 ns | 300 ns | 900 ns | 3.43 | 243.4% | 1 |
-| exact | L1 | — | 3.76 ms | — | 8.04 ms | — | — | 1 |
-| exact | L2 | 7.61 ms | 4.43 ms | 15.8 ms | 7.50 ms | 0.57 | -41.7% | 1 |
-| AND | L0 | 100 ns | 400 ns | 300 ns | 500 ns | 3.40 | 242.7% | 1 |
-| AND | L1 | — | 8.75 ms | — | 32.3 ms | — | — | 1 |
-| AND | L2 | 17.8 ms | 9.85 ms | 32.9 ms | 28.3 ms | 0.54 | -44.5% | 1 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `alpha` | 100 ns → 400 ns | 3.76 ms | 7.61 ms → 4.43 ms | 0.57 | -41.7% | 1 |
+| AND | `alpha` | 100 ns → 400 ns | 8.75 ms | 17.8 ms → 9.85 ms | 0.54 | -44.5% | 1 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 258 |
-| Documents | 10000 |
-| nextId | 10000 |
-| Postings typed bytes | 301548 |
-| Term index estimated bytes | 3217 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 314769 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 258 terms / 10,000 docs | nextId 10,000 |
+| Postings typed arrays | 294.5 KiB (301,548 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 3.1 KiB (3,217 bytes) | 262 nodes |
+| Document metadata | 9.8 KiB (10,000 bytes) | identity |
+| Estimated structured total | 307.4 KiB (314,769 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Extreme — overflow frequencies (>255) (`extreme-overflowFrequency`)
+<a id="scenario-extreme-overflowFrequency"></a>
+<details>
+<summary><strong>Extreme — overflow frequencies (&gt;255)</strong> (<code>extreme-overflowFrequency</code>) · 2,000 docs · ~93% less RAM · ~90% less binary · ~28% faster search p50</summary>
 
-2,000 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~90% less |
-| Load binary vs JSON | ~65% less |
-| Search frozen p50 avg gain | ~28% faster |
-| Heap frozen vs mutable saving | ~93% less |
+| Corpus | 2,000 docs; fields `txt`; storeFields — |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 248 ms |
-| fromDocuments | 234 ms |
-| toJSON (migrate) | 1.4 ms |
-| freeze import (fromJSON) | 7.5 ms |
-| JSON serialize (save) | 2.9 ms |
-| saveBinary | 1.6 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 0.091 MB | — |
-| Binary snapshot | 0.009 MB | ~90% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 3.1 ms | — |
-| FrozenMiniSearch.loadBinarySync | 1.1 ms | ~65% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 0.683 MB | heap 0.683 MB |
-| Frozen total resident | 0.048 MB | heap 0.023 MB |
-| Frozen vs mutable saving | 93.0% | heap-only 96.6% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 0.025 MB | arrayBuffers 0.025 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.002 MB |
+| Build mutable addAll | 248 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 234 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 1.4 ms + 7.5 ms | MiniSearch snapshot migration |
+| Save snapshot | 2.9 ms JSON / 1.6 ms binary | binary MSv5 |
+| Snapshot size | 0.091 MB JSON / 0.009 MB binary | ~90% less |
+| Load snapshot | 3.1 ms JSON / 1.1 ms binary | ~65% less |
+| Resident index RAM | 0.05 MB frozen vs 0.7 MB mutable (~93% less) | heap-only ~97% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `alpha` | 3 | 20 | 1.30 ms | 0.94 ms | 2.22 ms | 1.44 ms | 0.73 | -28.0% |
+| exact | `alpha` | 1.30 ms | 0.94 ms | 2.22 ms | 1.44 ms | 0.73 | -28.0% | 3×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 100 ns | 400 ns | 200 ns | 400 ns | 2.93 | 300.0% | 3 |
-| exact | L1 | — | 0.59 ms | — | 0.78 ms | — | — | 3 |
-| exact | L2 | 1.39 ms | 0.96 ms | 2.01 ms | 1.35 ms | 0.75 | -30.7% | 3 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
+
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `alpha` | 100 ns → 400 ns | 0.59 ms | 1.39 ms → 0.96 ms | 0.75 | -30.7% | 3 |
+
+#### Score drift
 
 | Query | topK | Max abs Δ | Max rel Δ | Missing in frozen topK | Order changed |
 | --- | --- | --- | --- | --- | --- |
 | `alpha` | 20 | 0.0000 | 0.0% | 0 | no |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 4 |
-| Documents | 2000 |
-| nextId | 2000 |
-| Postings typed bytes | 24016 |
-| Term index estimated bytes | 66 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 26086 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 4 terms / 2,000 docs | nextId 2,000 |
+| Postings typed arrays | 23.5 KiB (24,016 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 66 B (66 bytes) | 5 nodes |
+| Document metadata | 2.0 KiB (2,000 bytes) | identity |
+| Estimated structured total | 25.5 KiB (26,086 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Dense numeric ids (100k, identity lookup) (`denseNumericIds-100k`)
+<a id="scenario-denseNumericIds-100k"></a>
+<details>
+<summary><strong>Dense numeric ids (100k, identity lookup)</strong> (<code>denseNumericIds-100k</code>) · 100,000 docs · ~95% less RAM · ~73% less binary · ~30% faster search p50</summary>
 
-100,000 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~73% less |
-| Load binary vs JSON | ~90% less |
-| Search frozen p50 avg gain | ~30% faster |
-| Heap frozen vs mutable saving | ~95% less |
+| Corpus | 100,000 docs; fields `txt`; storeFields — |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 427 ms |
-| fromDocuments | 384 ms |
-| toJSON (migrate) | 587 ms |
-| freeze import (fromJSON) | 398 ms |
-| JSON serialize (save) | 601 ms |
-| saveBinary | 153 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 7.003 MB | — |
-| Binary snapshot | 1.867 MB | ~73% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 524 ms | — |
-| FrozenMiniSearch.loadBinarySync | 55 ms | ~90% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 91.267 MB | heap 91.267 MB |
-| Frozen total resident | 4.905 MB | heap 0.875 MB |
-| Frozen vs mutable saving | 94.6% | heap-only 99.0% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 4.030 MB | arrayBuffers 4.030 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.002 MB |
+| Build mutable addAll | 427 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 384 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 587 ms + 398 ms | MiniSearch snapshot migration |
+| Save snapshot | 601 ms JSON / 153 ms binary | binary MSv5 |
+| Snapshot size | 7.003 MB JSON / 1.867 MB binary | ~73% less |
+| Load snapshot | 524 ms JSON / 55 ms binary | ~90% less |
+| Resident index RAM | 4.91 MB frozen vs 91.3 MB mutable (~95% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `token42` | 53 | 50 | 68.6 µs | 48.0 µs | 0.11 ms | 97.1 µs | 0.70 | -30.0% |
+| exact | `token42` | 68.6 µs | 48.0 µs | 0.11 ms | 97.1 µs | 0.70 | -30.0% | 53×50 | yes |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 300 ns | 600 ns | 500 ns | 1.0 µs | 2.12 | 100.0% | 53 |
-| exact | L1 | — | 38.6 µs | — | 63.0 µs | — | — | 53 |
-| exact | L2 | 65.6 µs | 44.7 µs | 82.9 µs | 57.5 µs | 0.66 | -31.9% | 53 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `token42` | 300 ns → 600 ns | 38.6 µs | 65.6 µs → 44.7 µs | 0.66 | -31.9% | 53 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 101001 |
-| Documents | 100000 |
-| nextId | 100000 |
-| Postings typed bytes | 2308008 |
-| Term index estimated bytes | 2020065 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 4428077 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 101,001 terms / 100,000 docs | nextId 100,000 |
+| Postings typed arrays | 2.20 MiB (2,308,008 bytes) | dense, 32-bit doc ids |
+| Term index estimate | 1.93 MiB (2,020,065 bytes) | 101,003 nodes |
+| Document metadata | 97.7 KiB (100,000 bytes) | identity |
+| Estimated structured total | 4.22 MiB (4,428,077 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Generic string ids (100k, lazy-map lookup) (`genericStringIds-100k`)
+<a id="scenario-genericStringIds-100k"></a>
+<details>
+<summary><strong>Generic string ids (100k, lazy-map lookup)</strong> (<code>genericStringIds-100k</code>) · 100,000 docs · ~95% less RAM · ~74% less binary · ~27% faster search p50</summary>
 
-100,000 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~74% less |
-| Load binary vs JSON | ~87% less |
-| Search frozen p50 avg gain | ~27% faster |
-| Heap frozen vs mutable saving | ~95% less |
+| Corpus | 100,000 docs; fields `txt`; storeFields — |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 441 ms |
-| fromDocuments | 441 ms |
-| toJSON (migrate) | 637 ms |
-| freeze import (fromJSON) | 403 ms |
-| JSON serialize (save) | 643 ms |
-| saveBinary | 318 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 7.575 MB | — |
-| Binary snapshot | 1.973 MB | ~74% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 569 ms | — |
-| FrozenMiniSearch.loadBinarySync | 75 ms | ~87% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 91.267 MB | heap 91.267 MB |
-| Frozen total resident | 4.901 MB | heap 0.871 MB |
-| Frozen vs mutable saving | 94.6% | heap-only 99.0% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 4.030 MB | arrayBuffers 4.030 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.002 MB |
+| Build mutable addAll | 441 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 441 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 637 ms + 403 ms | MiniSearch snapshot migration |
+| Save snapshot | 643 ms JSON / 318 ms binary | binary MSv5 |
+| Snapshot size | 7.575 MB JSON / 1.973 MB binary | ~74% less |
+| Load snapshot | 569 ms JSON / 75 ms binary | ~87% less |
+| Resident index RAM | 4.90 MB frozen vs 91.3 MB mutable (~95% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `token42` | 36 | 20 | 84.7 µs | 61.5 µs | 0.14 ms | 0.12 ms | 0.85 | -27.4% |
+| exact | `token42` | 84.7 µs | 61.5 µs | 0.14 ms | 0.12 ms | 0.85 | -27.4% | 36×20 | yes |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 500 ns | 600 ns | 700 ns | 1.7 µs | 1.24 | 20.0% | 36 |
-| exact | L1 | — | 41.3 µs | — | 74.3 µs | — | — | 36 |
-| exact | L2 | 67.9 µs | 43.3 µs | 86.7 µs | 63.2 µs | 0.64 | -36.2% | 36 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `token42` | 500 ns → 600 ns | 41.3 µs | 67.9 µs → 43.3 µs | 0.64 | -36.2% | 36 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 101001 |
-| Documents | 100000 |
-| nextId | 100000 |
-| Postings typed bytes | 2308008 |
-| Term index estimated bytes | 2020065 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 4428077 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 101,001 terms / 100,000 docs | nextId 100,000 |
+| Postings typed arrays | 2.20 MiB (2,308,008 bytes) | dense, 32-bit doc ids |
+| Term index estimate | 1.93 MiB (2,020,065 bytes) | 101,003 nodes |
+| Document metadata | 97.7 KiB (100,000 bytes) | lazy-map |
+| Estimated structured total | 4.22 MiB (4,428,077 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Sparse fields (5k docs × 20 fields, one active field/doc) (`sparseFields-50kTerms-20Fields`)
+<a id="scenario-sparseFields-50kTerms-20Fields"></a>
+<details>
+<summary><strong>Sparse fields (5k docs × 20 fields, one active field/doc)</strong> (<code>sparseFields-50kTerms-20Fields</code>) · 5,000 docs · ~95% less RAM · ~91% less binary · ~37% faster search p50</summary>
 
-5,000 documents · fields: f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19 · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~91% less |
-| Load binary vs JSON | ~84% less |
-| Search frozen p50 avg gain | ~37% faster |
-| Heap frozen vs mutable saving | ~95% less |
+| Corpus | 5,000 docs; fields `f0`, `f1`, `f2`, `f3`, `f4`, `f5`, `f6`, `f7`, `f8`, `f9`, `f10`, `f11`, `f12`, `f13`, `f14`, `f15`, `f16`, `f17`, `f18`, `f19`; storeFields — |
+| Measurement notes | standard run |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 28 ms |
-| fromDocuments | 49 ms |
-| toJSON (migrate) | 24 ms |
-| freeze import (fromJSON) | 57 ms |
-| JSON serialize (save) | 30 ms |
-| saveBinary | 7.4 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 0.561 MB | — |
-| Binary snapshot | 0.049 MB | ~91% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 25 ms | — |
-| FrozenMiniSearch.loadBinarySync | 4.0 ms | ~84% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 5.161 MB | heap 5.161 MB |
-| Frozen total resident | 0.281 MB | heap 0.061 MB |
-| Frozen vs mutable saving | 94.6% | heap-only 98.8% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 0.220 MB | arrayBuffers 0.220 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.003 MB |
+| Build mutable addAll | 28 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 49 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 24 ms + 57 ms | MiniSearch snapshot migration |
+| Save snapshot | 30 ms JSON / 7.4 ms binary | binary MSv5 |
+| Snapshot size | 0.561 MB JSON / 0.049 MB binary | ~91% less |
+| Load snapshot | 25 ms JSON / 4.0 ms binary | ~84% less |
+| Resident index RAM | 0.28 MB frozen vs 5.2 MB mutable (~95% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `shared` | 2 | 20 | 3.72 ms | 2.34 ms | 5.19 ms | 3.75 ms | 0.61 | -37.1% |
+| exact | `shared` | 3.72 ms | 2.34 ms | 5.19 ms | 3.75 ms | 0.61 | -37.1% | 2×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 300 ns | 800 ns | 500 ns | 1.0 µs | 3.36 | 166.7% | 2 |
-| exact | L1 | — | 1.75 ms | — | 2.66 ms | — | — | 2 |
-| exact | L2 | 4.08 ms | 2.30 ms | 5.86 ms | 4.14 ms | 0.58 | -43.6% | 2 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `shared` | 300 ns → 800 ns | 1.75 ms | 4.08 ms → 2.30 ms | 0.58 | -43.6% | 2 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 5002 |
-| Documents | 5000 |
-| nextId | 5000 |
-| Postings typed bytes | 80206 |
-| Term index estimated bytes | 60077 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 240363 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 5,002 terms / 5,000 docs | nextId 5,000 |
+| Postings typed arrays | 78.3 KiB (80,206 bytes) | sparse, 16-bit doc ids |
+| Term index estimate | 58.7 KiB (60,077 bytes) | 5,005 nodes |
+| Document metadata | 97.7 KiB (100,000 bytes) | identity |
+| Estimated structured total | 234.7 KiB (240,363 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Doc id Uint16 boundary (65535 docs) (`docIdUint16Boundary-65535`)
+<a id="scenario-docIdUint16Boundary-65535"></a>
+<details>
+<summary><strong>Doc id Uint16 boundary (65535 docs)</strong> (<code>docIdUint16Boundary-65535</code>) · 65,535 docs · ~95% less RAM · ~77% less binary · ~55% faster search p50</summary>
 
-65,535 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~77% less |
-| Load binary vs JSON | ~87% less |
-| Search frozen p50 avg gain | ~55% faster |
-| Heap frozen vs mutable saving | ~95% less |
+| Corpus | 65,535 docs; fields `txt`; storeFields — |
+| Measurement notes | 1/3 runs (very expensive calibrated search (95.3 ms >= 50 ms)) |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 305 ms |
-| fromDocuments | 245 ms |
-| toJSON (migrate) | 395 ms |
-| freeze import (fromJSON) | 269 ms |
-| JSON serialize (save) | 412 ms |
-| saveBinary | 104 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 5.165 MB | — |
-| Binary snapshot | 1.176 MB | ~77% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 356 ms | — |
-| FrozenMiniSearch.loadBinarySync | 45 ms | ~87% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 58.603 MB | heap 58.603 MB |
-| Frozen total resident | 2.894 MB | heap 0.581 MB |
-| Frozen vs mutable saving | 95.1% | heap-only 99.0% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 2.313 MB | arrayBuffers 2.313 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.017 MB |
+| Build mutable addAll | 305 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 245 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 395 ms + 269 ms | MiniSearch snapshot migration |
+| Save snapshot | 412 ms JSON / 104 ms binary | binary MSv5 |
+| Snapshot size | 5.165 MB JSON / 1.176 MB binary | ~77% less |
+| Load snapshot | 356 ms JSON / 45 ms binary | ~87% less |
+| Resident index RAM | 2.89 MB frozen vs 58.6 MB mutable (~95% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `alpha` | 1 | 20 | 70.0 ms | 31.6 ms | 81.3 ms | 46.5 ms | 0.47 | -54.8% |
+| exact | `alpha` | 70.0 ms | 31.6 ms | 81.3 ms | 46.5 ms | 0.47 | -54.8% | 1×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 100 ns | 400 ns | 300 ns | 500 ns | 2.86 | 185.8% | 1 |
-| exact | L1 | — | 27.6 ms | — | 47.9 ms | — | — | 1 |
-| exact | L2 | 72.1 ms | 34.4 ms | 133.1 ms | 61.4 ms | 0.47 | -52.3% | 1 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `alpha` | 100 ns → 400 ns | 27.6 ms | 72.1 ms → 34.4 ms | 0.47 | -52.3% | 1 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 65538 |
-| Documents | 65535 |
-| nextId | 65535 |
-| Postings typed bytes | 1179648 |
-| Term index estimated bytes | 1310817 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 2556004 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 65,538 terms / 65,535 docs | nextId 65,535 |
+| Postings typed arrays | 1.13 MiB (1,179,648 bytes) | dense, 16-bit doc ids |
+| Term index estimate | 1.25 MiB (1,310,817 bytes) | 65,540 nodes |
+| Document metadata | 64.0 KiB (65,535 bytes) | identity |
+| Estimated structured total | 2.44 MiB (2,556,004 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## Doc id Uint32 boundary (65536 docs) (`docIdUint16Boundary-65536`)
+<a id="scenario-docIdUint16Boundary-65536"></a>
+<details>
+<summary><strong>Doc id Uint32 boundary (65536 docs)</strong> (<code>docIdUint16Boundary-65536</code>) · 65,536 docs · ~94% less RAM · ~74% less binary · ~54% faster search p50</summary>
 
-65,536 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~74% less |
-| Load binary vs JSON | ~89% less |
-| Search frozen p50 avg gain | ~54% faster |
-| Heap frozen vs mutable saving | ~94% less |
+| Corpus | 65,536 docs; fields `txt`; storeFields — |
+| Measurement notes | 1/3 runs (very expensive calibrated search (95.6 ms >= 50 ms)) |
 
-### Indexing & migrate
-
-| Metric | Time |
-| --- | --- |
-| addAll | 274 ms |
-| fromDocuments | 233 ms |
-| toJSON (migrate) | 324 ms |
-| freeze import (fromJSON) | 283 ms |
-| JSON serialize (save) | 391 ms |
-| saveBinary | 96 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
-| --- | --- | --- |
-| JSON snapshot | 5.165 MB | — |
-| Binary snapshot | 1.345 MB | ~74% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 390 ms | — |
-| FrozenMiniSearch.loadBinarySync | 44 ms | ~89% less |
-
-### Memory / heap
+### Performance
 
 | Metric | Value | Detail |
 | --- | --- | --- |
-| Mutable total resident | 58.604 MB | heap 58.604 MB |
-| Frozen total resident | 3.511 MB | heap 0.573 MB |
-| Frozen vs mutable saving | 94.0% | heap-only 99.0% |
-| Mutable external | 0.000 MB | arrayBuffers 0.000 MB |
-| Frozen external | 2.938 MB | arrayBuffers 2.938 MB |
-| MAD (mutable total) | 0.000 MB | frozen 0.003 MB |
+| Build mutable addAll | 274 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 233 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 324 ms + 283 ms | MiniSearch snapshot migration |
+| Save snapshot | 391 ms JSON / 96 ms binary | binary MSv5 |
+| Snapshot size | 5.165 MB JSON / 1.345 MB binary | ~74% less |
+| Load snapshot | 390 ms JSON / 44 ms binary | ~89% less |
+| Resident index RAM | 3.51 MB frozen vs 58.6 MB mutable (~94% less) | heap-only ~99% less |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `alpha` | 1 | 20 | 77.8 ms | 35.6 ms | 106.4 ms | 56.9 ms | 0.47 | -54.2% |
+| exact | `alpha` | 77.8 ms | 35.6 ms | 106.4 ms | 56.9 ms | 0.47 | -54.2% | 1×20 | no |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 100 ns | 400 ns | 300 ns | 500 ns | 2.92 | 191.0% | 1 |
-| exact | L1 | — | 24.6 ms | — | 44.6 ms | — | — | 1 |
-| exact | L2 | 62.9 ms | 29.3 ms | 105.7 ms | 54.1 ms | 0.48 | -53.4% | 1 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `alpha` | 100 ns → 400 ns | 24.6 ms | 62.9 ms → 29.3 ms | 0.48 | -53.4% | 1 |
 
-### Structured memory breakdown
+#### Memory structure
 
-| Breakdown | Value |
-| --- | --- |
-| Terms | 65539 |
-| Documents | 65536 |
-| nextId | 65536 |
-| Postings typed bytes | 1835032 |
-| Term index estimated bytes | 1310837 |
-| Stored fields JSON bytes | 0 |
-| Estimated structured bytes | 3211409 |
+| Area | Size / count | Detail |
+| --- | --- | --- |
+| Terms / docs | 65,539 terms / 65,536 docs | nextId 65,536 |
+| Postings typed arrays | 1.75 MiB (1,835,032 bytes) | dense, 32-bit doc ids |
+| Term index estimate | 1.25 MiB (1,310,837 bytes) | 65,541 nodes |
+| Document metadata | 64.0 KiB (65,536 bytes) | identity |
+| Estimated structured total | 3.06 MiB (3,211,409 bytes) | postings + term index + document metadata |
 
+</details>
+
+</details>
 
 ---
 
-## saveBinary dictionary rebuild (50k terms) (`saveBinaryAfterNoTerms`)
+<a id="scenario-saveBinaryAfterNoTerms"></a>
+<details>
+<summary><strong>saveBinary dictionary rebuild (50k terms)</strong> (<code>saveBinaryAfterNoTerms</code>) · 50,000 docs · ~81% less binary · ~3% faster search p50</summary>
 
-50,000 documents · fields: txt · storeFields: —
+### At a glance
 
-### Summary
-
-| Summary metric | Value |
+| Property | Value |
 | --- | --- |
-| Disk binary vs JSON | ~81% less |
-| Load binary vs JSON | ~88% less |
-| Search frozen p50 avg gain | ~3% faster |
-| Heap frozen vs mutable saving | — |
+| Corpus | 50,000 docs; fields `txt`; storeFields — |
+| Measurement notes | heap skipped: not-in-allowlist |
 
-### Indexing & migrate
+### Performance
 
-| Metric | Time |
-| --- | --- |
-| addAll | 194 ms |
-| fromDocuments | 226 ms |
-| toJSON (migrate) | 192 ms |
-| freeze import (fromJSON) | 303 ms |
-| JSON serialize (save) | 323 ms |
-| saveBinary | 64 ms |
-| binary magic | MSv5 |
-
-### Disk
-
-| Format | Size | vs JSON |
+| Metric | Value | Detail |
 | --- | --- | --- |
-| JSON snapshot | 4.207 MB | — |
-| Binary snapshot | 0.800 MB | ~81% less |
-
-### Load
-
-| Path | Time | vs JSON load |
-| --- | --- | --- |
-| MiniSearch.loadJSON | 269 ms | — |
-| FrozenMiniSearch.loadBinarySync | 32 ms | ~88% less |
-
-### Memory / heap
-
-_Heap skipped (not-in-allowlist)._
+| Build mutable addAll | 194 ms | MiniSearch baseline build path |
+| Build frozen fromDocuments | 226 ms | Direct frozen build path |
+| Migrate toJSON → fromJSON | 192 ms + 303 ms | MiniSearch snapshot migration |
+| Save snapshot | 323 ms JSON / 64 ms binary | binary MSv5 |
+| Snapshot size | 4.207 MB JSON / 0.800 MB binary | ~81% less |
+| Load snapshot | 269 ms JSON / 32 ms binary | ~88% less |
+| Resident index RAM | skipped (not-in-allowlist) | — |
 
 ### Search
 
-| Label | Query | Batch | Iter | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain |
+| Label | Query | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen delta | Batch×iter | <0.1ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | `unique9999` | 256 | 50 | 5.9 µs | 5.7 µs | 8.9 µs | 9.8 µs | 0.91 | -3.4% |
+| exact | `unique9999` | 5.9 µs | 5.7 µs | 8.9 µs | 9.8 µs | 0.91 | -3.4% | 256×50 | yes |
 
-### Search levels
 
-| Query label | Level | Mutable p50 | Frozen p50 | Mutable p95 | Frozen p95 | Ratio p50 | Frozen gain | Batch |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| exact | L0 | 500 ns | 200 ns | 700 ns | 400 ns | 0.34 | -60.0% | 256 |
-| exact | L1 | — | 4.3 µs | — | 6.4 µs | — | — | 256 |
-| exact | L2 | 4.6 µs | 2.8 µs | 7.2 µs | 4.1 µs | 0.60 | -39.1% | 256 |
+<details>
+<summary>Diagnostics</summary>
 
-### Score drift
+#### Search-level breakdown
 
-_Not measured._
+| Query label | Term | L0 lookup p50 | L1 frozen p50 | L2 search p50 | L2 ratio | L2 delta | Batch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| exact | `unique9999` | 500 ns → 200 ns | 4.3 µs | 4.6 µs → 2.8 µs | 0.60 | -39.1% | 256 |
 
-### Structured memory breakdown
+#### Memory structure
 
 _Not measured._
 
+</details>
+
+</details>
 
 See [benchmarks/README.md](README.md) for harness profiles, surfaces, and how to refresh this file (`pnpm bench:reference:update`).
