@@ -218,6 +218,18 @@ Capture : `benchmarks/baselines/latest-freeze-shell-paired.json`.
 
 ---
 
+## Non-adoptions natives — primitives JS modernes (2026-07-04)
+
+Ces primitives restent hors produit tant qu'un benchmark dédié ne prouve pas un gain net sans perte de compatibilité :
+
+- `ResizableArrayBuffer` / `ArrayBuffer.resize()` : intéressant pour les colonnes growables, mais non retenu sans spike isolé. Le produit garde les `TypedArray` classiques + réallocation explicite pour préserver `node >=20`, browser build et comportement mémoire prévisible.
+- `Intl.Segmenter` : non équivalent au tokenizer MiniSearch (`SPACE_OR_PUNCTUATION` + `processTerm`) ; ne pas l'utiliser comme remplacement du tokenizer par défaut sans contrat de parité explicite.
+- `scheduler.yield()` : ne remplace pas `setTimeout(0)` dans `addAllAsync` sans fallback, car la disponibilité browser reste moins large que le reste de l'API publique.
+
+Un spike éventuel doit rester côté `benchmarks/` ou `dev/`, interdit dans le graphe produit tant que les critères suivants ne sont pas satisfaits : gain freeze/import Divina et dense, pas de hausse bundle, pas de hausse peak RAM, compat runtime documentée.
+
+---
+
 ## Session optimisation freeze 2 — `acdefc9` (2026-07-03)
 
 **Politique** : validation relaxée (sûreté minimale hostiles, contrat MiniSearch courant sur le hot path).
