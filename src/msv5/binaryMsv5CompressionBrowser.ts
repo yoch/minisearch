@@ -33,6 +33,11 @@ import {
   readMsv5SnapshotCompressionMeta as readMsv5SnapshotCompressionMetaShared,
   writeMsv5FileHeader,
 } from './binaryMsv5ContainerShared'
+import {
+  pickAutoPayloadCodec,
+  rawPayloadChoice,
+  type Msv5PayloadCodecChoice,
+} from './binaryMsv5CompressionShared'
 export type { Msv5SectionEntry, Msv5SnapshotCompressionMeta } from './binaryMsv5Types'
 
 export interface Msv5AssembledFileBrowser {
@@ -55,26 +60,7 @@ function zstdUnavailableReadError(): Error {
   )
 }
 
-interface PayloadCodecChoice {
-  payload: BinaryBytes
-  codec: number
-  zstdLevel: number
-}
-
-function rawPayloadChoice(uncompressed: BinaryBytes): PayloadCodecChoice {
-  return { payload: uncompressed, codec: CODEC_RAW, zstdLevel: 0 }
-}
-
-function pickAutoPayloadCodec(
-  uncompressed: BinaryBytes,
-  compressed: BinaryBytes,
-  codec: number,
-): PayloadCodecChoice {
-  if (compressed.length < uncompressed.length) {
-    return { payload: compressed, codec, zstdLevel: 0 }
-  }
-  return rawPayloadChoice(uncompressed)
-}
+type PayloadCodecChoice = Msv5PayloadCodecChoice<BinaryBytes>
 
 async function zlibPayloadChoiceAsync(uncompressed: BinaryBytes): Promise<PayloadCodecChoice> {
   return { payload: await browserZlibDeflateAsync(uncompressed), codec: CODEC_ZLIB, zstdLevel: 0 }

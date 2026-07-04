@@ -32,6 +32,11 @@ import {
   readMsv5SnapshotCompressionMeta as readMsv5SnapshotCompressionMetaShared,
   writeMsv5FileHeader,
 } from './binaryMsv5ContainerShared'
+import {
+  pickAutoPayloadCodec,
+  rawPayloadChoice,
+  type Msv5PayloadCodecChoice,
+} from './binaryMsv5CompressionShared'
 export type { Msv5SectionEntry, Msv5SnapshotCompressionMeta } from './binaryMsv5Types'
 
 export interface Msv5AssembledFile {
@@ -180,27 +185,7 @@ function msv5ZstdCompressOptions(
   } as NonNullable<Parameters<typeof zlib.zstdCompressSync>[1]>
 }
 
-interface PayloadCodecChoice {
-  payload: Buffer
-  codec: number
-  zstdLevel: number
-}
-
-function rawPayloadChoice(uncompressed: Buffer): PayloadCodecChoice {
-  return { payload: uncompressed, codec: CODEC_RAW, zstdLevel: 0 }
-}
-
-/** Auto mode: one compression attempt; keep it only when strictly smaller than raw. */
-function pickAutoPayloadCodec(uncompressed: Buffer, compressed: Buffer, codec: number): PayloadCodecChoice {
-  if (compressed.length < uncompressed.length) {
-    return {
-      payload: compressed,
-      codec,
-      zstdLevel: codec === CODEC_ZSTD ? MSV5_ZSTD_LEVEL : 0,
-    }
-  }
-  return rawPayloadChoice(uncompressed)
-}
+type PayloadCodecChoice = Msv5PayloadCodecChoice<Buffer>
 
 function zstdPayloadChoiceSync(uncompressed: Buffer): PayloadCodecChoice {
   if (!zstdAvailable()) {
