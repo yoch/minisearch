@@ -2,12 +2,24 @@
 
 ## Unreleased
 
+## v1.8.0 — `@yoch/frozenminisearch`
+
+Minor release: faster MiniSearch JSON import, tighter snapshot validation at the import boundary, and internal query-engine cleanup. No public API or MSv5 wire-format changes.
+
+### Improved
+
+- **MiniSearch JSON import** — faster trusted-snapshot index accumulation (~14–22% lower freeze import on large corpora in paired benchmarks); separate v1/v2 accumulation paths avoid per-field serialization-version checks on the hot path.
+- **Query execution** — leaner AND/AND_NOT gating, combination resolution, and doc-id collection on hot paths; frozen search semantics unchanged.
+
 ### Changed
 
-- **Benchmark internals** — source-based benchmark probes now import FrozenMiniSearch internals through `benchmarks/harness/frozenSourceInternals.ts`, with `assert-internal-boundary.cjs` guarding against new direct `benchmarks/ → src/internal` imports.
-- **Benchmark runner** — simplify `benchmarkUtils.js` / `benchmarkSuite.js` by dropping unused utility exports and centralizing optional-surface aggregation, so partial benchmark surfaces no longer produce empty `diskMb` / `loadMs` payloads.
+- **Snapshot validation** — shared canonical integer-key checks for import and index accumulation; reject leading-zero object keys (e.g. `"01"`) consistently at the import boundary.
+- **Published bundles** — drop freeze profiler hooks from shipped `dist/*` bundles (profiling remains in dev/benchmark scripts only).
+- **Benchmark docs** — full performance comparison table lives in `benchmarks/VS_REFERENCE.md`; root README links to it.
+- **Benchmark internals** — source-based benchmark probes import FrozenMiniSearch internals through `benchmarks/harness/frozenSourceInternals.ts`, with `assert-internal-boundary.cjs` guarding against new direct `benchmarks/ → src/internal` imports.
+- **Benchmark runner** — simplify `benchmarkUtils.js` / `benchmarkSuite.js` by dropping unused utility exports and centralizing optional-surface aggregation.
 - **Test/bench memory breakdown** — move the retained-structure estimator out of `src/internal/frozenInternals.ts` into `testSupport/`, sharing one implementation across source and dist benchmark harnesses.
-- **Test import helpers** — move MiniSearch snapshot assembly helpers out of `src/internal/frozenInternals.ts` into `testSupport/`, leaving the internal hub focused on query/scoring probes.
+- **Test import helpers** — move MiniSearch snapshot assembly helpers out of `src/internal/frozenInternals.ts` into `testSupport/`.
 - **Benchmark metadata** — stop emitting redundant `benchProfile` in new captures; benchmark mode is now derived from `benchSurfaces`, while diff tooling still reads legacy baselines.
 
 ### Removed

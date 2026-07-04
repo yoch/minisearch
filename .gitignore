@@ -17,11 +17,14 @@ ANALYSE_STRATEGIE_PACKAGE.md
 FINDINGS_AUDIT.md
 /benchmarks/tmp/
 benchmarks/baselines/latest.json
+benchmarks/baselines/latest-*.json
 benchmarks/baselines/latest-heap.json
+.worktrees/
 benchmarks/baselines/packed-radix-latest.json
 # Local-only scoring/perf investigation helpers
 benchmarks/scripts/calibrate-seek-vs-scan.mjs
 benchmarks/scripts/perf-stat-scoring.mjs
+benchmarks/scripts/compare-freeze-memory.mjs
 # Local-only fuzzy algo A/B (prefix-string candidate vs prod segments)
 benchmarks/fuzzyPrefixVariant.ts
 benchmarks/packedRadixFuzzyAlgoCompare.js

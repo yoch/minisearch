@@ -32,23 +32,9 @@ Internally it uses packed radix postings, typed arrays, and columnar stored fiel
 <!-- vs-reference:start — pnpm bench:readme -->
 ### Measured vs MiniSearch
 
-Same corpora, same BM25-style queries, MiniSearch 7.2.0 as the reference.
+On the main benchmark set vs MiniSearch 7.2.0, frozen indexes use **~95% less index RAM** and win on **27/27 search cases**.
 
-| Scenario | Docs | Index RAM | Binary size | Load JSON | Load binary | Freeze import | Search p50 |
-|----------|-----:|-----------|------------:|----------:|------------:|--------------:|-----------:|
-| Divina, with stored text | 14,097 | 0.82 vs 16.1 MB (~95% less) | ~71% less | 82 ms | 35 ms | 86 ms | ~33% faster |
-| Divina, index only | 14,097 | 0.71 vs 14.9 MB (~95% less) | ~75% less | 79 ms | 17 ms | 80 ms | ~28% faster |
-| Giant vocabulary (50k terms) | 50,000 | 1.82 vs 47.2 MB (~96% less) | ~81% less | 230 ms | 39 ms | 203 ms | ~42% faster |
-| Dense numeric ids | 100,000 | 4.91 vs 91.3 MB (~95% less) | ~73% less | 503 ms | 52 ms | 380 ms | ~36% faster |
-| Generic string ids | 100,000 | 4.90 vs 91.3 MB (~95% less) | ~74% less | 556 ms | 65 ms | 355 ms | -1% |
-| Uint16 doc id boundary | 65,535 | 2.89 vs 58.6 MB (~95% less) | ~77% less | 372 ms | 37 ms | 292 ms | ~53% faster |
-| Uint32 doc id boundary | 65,536 | 3.51 vs 58.6 MB (~94% less) | ~74% less | 360 ms | 44 ms | 253 ms | ~53% faster |
-
-Load JSON = `MiniSearch.loadJSON` on the same `toJSON` snapshot. Load binary = `loadBinarySync` after `saveBinarySync`. Freeze import = one-time `FrozenMiniSearch.fromJSON` (not the hot reload path).
-
-Across this full run, frozen is faster on **26/27** search cases. Divina `inferno` (exact, paired p50): mutable 15.5 µs → frozen 10.3 µs (**-5 µs**, ratio 0.70).
-
-Numbers are from `benchmarks/baselines/reference.json` @ `96f3c83`, captured 2026-07-03 on Node v24.16.0, 3 runs per scenario. Heap protocol v4 (isolated scenario processes, in-process trials, median+MAD; totalResident = heapUsed + external on both sides) — trend, not exact accounting.
+Full comparison table, column definitions, and capture metadata: **[benchmarks/VS_REFERENCE.md](benchmarks/VS_REFERENCE.md)** (`benchmarks/baselines/reference.json` @ `1cdc405`, 2026-07-04).
 <!-- vs-reference:end -->
 
 ---

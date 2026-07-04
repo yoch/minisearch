@@ -26,7 +26,7 @@ commit, on a clean tree — not in the same commit as the version bump:
 
 ```bash
 make benchmark-record            # capture into latest.json
-make bench-reference-update      # capture/promote reference.json + regenerate README table
+make bench-reference-update      # capture/promote reference.json + VS_REFERENCE.md + README pointer
 git add benchmarks/baselines/reference.json
 git commit -m "Refresh benchmark reference for 8.1.0."
 ```

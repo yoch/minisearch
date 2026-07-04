@@ -47,7 +47,7 @@ make bench-reference-update
 # equivalent to:
 #   RUNS=3 cli.mjs record --profile=vs-reference
 #   promote-latest-to-reference.mjs
-#   generate-readme-comparison.mjs
+#   generate-readme-comparison.mjs → benchmarks/VS_REFERENCE.md + README pointer
 ```
 
 `benchmark:baseline:update` was removed; prefer `bench:reference:update`,

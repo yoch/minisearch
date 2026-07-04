@@ -1,6 +1,6 @@
 {
   "name": "@yoch/frozenminisearch",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Read-only full-text search — compact frozen indexes and binary snapshots (Node.js and browser)",
   "main": "dist/cjs/index.require.cjs",
   "module": "dist/es/index.js",
