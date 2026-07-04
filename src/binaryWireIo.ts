@@ -19,6 +19,7 @@ import {
   type BinaryBytes,
 } from './binaryBytes'
 import { invalidFrozenIndex } from './frozenErrors'
+import { buildStoredFieldsRowsWireSection } from './storedFieldsWire'
 
 export function readLengthPrefixedUtf8(buf: BinaryBytes, offset: number): { value: string, next: number } {
   if (offset + 4 > buf.length) {
@@ -183,22 +184,5 @@ export function buildStoredFieldsSectionWire(
   storedFields: (Record<string, unknown> | undefined)[],
   nextId: number,
 ): BinaryBytes {
-  const table = allocBytes(nextId * 4)
-  const heapChunks: BinaryBytes[] = []
-  let heapOff = 0
-  for (let i = 0; i < nextId; i++) {
-    const row = storedFields[i]
-    if (row == null) {
-      writeU32LE(table, i * 4, 0)
-      continue
-    }
-    writeU32LE(table, i * 4, heapOff + 1)
-    const json = utf8Bytes(JSON.stringify(row))
-    const entry = allocBytes(4 + json.length)
-    writeU32LE(entry, 0, json.length)
-    entry.set(json, 4)
-    heapChunks.push(entry)
-    heapOff += entry.length
-  }
-  return heapChunks.length === 0 ? table : concatBytes([table, ...heapChunks])
+  return buildStoredFieldsRowsWireSection(storedFields, nextId)
 }

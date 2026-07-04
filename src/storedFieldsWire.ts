@@ -7,7 +7,6 @@ import {
   writeU32LE,
   type BinaryBytes,
 } from './binaryBytes'
-import { buildStoredFieldsSectionWire } from './binaryWireIo'
 import { invalidFrozenIndex } from './frozenErrors'
 import {
   storedFieldsFromRows,
@@ -29,13 +28,31 @@ function appendStoredFieldJsonEntry(
   heapOffRef.value += entry.length
 }
 
+export function buildStoredFieldsRowsWireSection(
+  storedFields: (Record<string, unknown> | undefined)[],
+  nextId: number,
+): BinaryBytes {
+  const table = allocBytes(nextId * 4)
+  const heapChunks: BinaryBytes[] = []
+  const heapOffRef = { value: 0 }
+  for (let i = 0; i < nextId; i++) {
+    const row = storedFields[i]
+    if (row == null) {
+      writeU32LE(table, i * 4, 0)
+      continue
+    }
+    appendStoredFieldJsonEntry(table, heapChunks, heapOffRef, i, utf8Bytes(JSON.stringify(row)))
+  }
+  return heapChunks.length === 0 ? table : concatBytes([table, ...heapChunks])
+}
+
 /** MSv5 StoredFields section from {@link StoredFieldsLayout} (no intermediate row array). */
 export function buildStoredFieldsWireSection(layout: StoredFieldsLayout, nextId: number): BinaryBytes {
   if (layout.kind === 'multi') {
     const rows = layout.rows.length >= nextId
       ? layout.rows
       : layout.rows.concat(new Array(nextId - layout.rows.length))
-    return buildStoredFieldsSectionWire(rows, nextId)
+    return buildStoredFieldsRowsWireSection(rows, nextId)
   }
 
   const table = allocBytes(nextId * 4)

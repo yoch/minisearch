@@ -12,7 +12,11 @@ import {
   writeStoredField,
 } from './storedFieldsLayout'
 import { allocBytes, writeU32LE } from './binaryBytes'
-import { buildStoredFieldsWireSection, readStoredFieldsWireSection } from './storedFieldsWire'
+import {
+  buildStoredFieldsRowsWireSection,
+  buildStoredFieldsWireSection,
+  readStoredFieldsWireSection,
+} from './storedFieldsWire'
 import { buildStoredFieldsSectionWire } from './binaryWireIo'
 
 describe('storedFieldsLayout', () => {
@@ -40,6 +44,28 @@ describe('storedFieldsLayout', () => {
     const fromRows = buildStoredFieldsSectionWire(storedFieldsToWireRows(layout, 2), 2)
     const direct = buildStoredFieldsWireSection(layout, 2)
     expect(Buffer.from(direct)).toEqual(Buffer.from(fromRows))
+  })
+
+  test('row wire wrapper delegates byte-for-byte to canonical storedFieldsWire encoder', () => {
+    const cases = [
+      { rows: [undefined, undefined], nextId: 2, storeFields: [] },
+      { rows: [{ txt: 'x' }, undefined, { txt: 'y' }], nextId: 3, storeFields: ['txt'] },
+      { rows: [{ title: 'A', category: 'x' }, undefined], nextId: 2, storeFields: ['title', 'category'] },
+      { rows: [{ title: 'A' }], nextId: 3, storeFields: [] },
+    ]
+
+    for (const { rows, nextId, storeFields } of cases) {
+      const wrapper = buildStoredFieldsSectionWire(rows, nextId)
+      const canonicalRows = buildStoredFieldsRowsWireSection(rows, nextId)
+      const layout = storedFieldsFromRows(rows, storeFields)
+      const layoutWire = buildStoredFieldsWireSection(layout, nextId)
+      expect(Buffer.from(wrapper)).toEqual(Buffer.from(canonicalRows))
+      expect(Buffer.from(layoutWire)).toEqual(Buffer.from(canonicalRows))
+    }
+
+    const rowsWithUndefinedValue = [{ txt: undefined }, undefined]
+    expect(Buffer.from(buildStoredFieldsSectionWire(rowsWithUndefinedValue, 2)))
+      .toEqual(Buffer.from(buildStoredFieldsRowsWireSection(rowsWithUndefinedValue, 2)))
   })
 
   test('wire section read → single column', () => {
