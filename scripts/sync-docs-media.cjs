@@ -14,6 +14,7 @@ const COPIES = [
   ['DESIGN_DOCUMENT.md', 'DESIGN_DOCUMENT.md'],
   ['CHANGELOG.md', 'CHANGELOG.md'],
   ['benchmarks/README.md', 'README.md'],
+  ['benchmarks/VS_REFERENCE.md', 'VS_REFERENCE.md'],
   ['benchmarks/baselines/reference.json', 'reference.json'],
 ]
 

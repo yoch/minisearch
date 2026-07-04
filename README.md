@@ -32,9 +32,25 @@ Internally it uses packed radix postings, typed arrays, and columnar stored fiel
 <!-- vs-reference:start — pnpm bench:readme -->
 ### Measured vs MiniSearch
 
-On the main benchmark set vs MiniSearch 7.2.0, frozen indexes use **~95% less index RAM** and win on **27/27 search cases**.
+Same corpora, same BM25-style queries, MiniSearch 7.2.0 as the reference.
 
-Full comparison table, column definitions, and capture metadata: **[benchmarks/VS_REFERENCE.md](benchmarks/VS_REFERENCE.md)** (`benchmarks/baselines/reference.json` @ `1cdc405`, 2026-07-04).
+| Scenario | Docs | Index RAM | Binary size | Load JSON | Load binary | Freeze import | Search p50 |
+|----------|-----:|-----------|------------:|----------:|------------:|--------------:|-----------:|
+| Divina, with stored text | 14,097 | 0.82 vs 16.1 MB (~95% less) | ~71% less | 92 ms | 41 ms | 96 ms | ~30% faster |
+| Divina, index only | 14,097 | 0.71 vs 14.9 MB (~95% less) | ~75% less | 115 ms | 19 ms | 112 ms | ~30% faster |
+| Giant vocabulary (50k terms) | 50,000 | 1.82 vs 47.2 MB (~96% less) | ~81% less | 264 ms | 49 ms | 245 ms | ~46% faster |
+| Dense numeric ids | 100,000 | 4.91 vs 91.3 MB (~95% less) | ~73% less | 524 ms | 55 ms | 398 ms | ~30% faster |
+| Generic string ids | 100,000 | 4.90 vs 91.3 MB (~95% less) | ~74% less | 569 ms | 75 ms | 403 ms | ~27% faster |
+| Uint16 doc id boundary | 65,535 | 2.89 vs 58.6 MB (~95% less) | ~77% less | 356 ms | 45 ms | 269 ms | ~55% faster |
+| Uint32 doc id boundary | 65,536 | 3.51 vs 58.6 MB (~94% less) | ~74% less | 390 ms | 44 ms | 283 ms | ~54% faster |
+
+Load JSON = `MiniSearch.loadJSON` on the same `toJSON` snapshot. Load binary = `loadBinarySync` after `saveBinarySync`. Freeze import = one-time `FrozenMiniSearch.fromJSON` (not the hot reload path).
+
+Across this full run, frozen is faster on **27/27** search cases. Divina `inferno` (exact, paired p50): mutable 17.2 µs → frozen 13.1 µs (**-4 µs**, ratio 0.69).
+
+Numbers are from `benchmarks/baselines/reference.json` @ `1cdc405`, captured 2026-07-04 on Node v24.16.0, 3 runs per scenario. Heap protocol v4 (isolated scenario processes, in-process trials, median+MAD; totalResident = heapUsed + external on both sides) — trend, not exact accounting. Index RAM column shows — for scenarios outside the heap allowlist.
+
+Detailed tables for all 13 scenarios (search, load, migrate, heap, drift, …): **[benchmarks/VS_REFERENCE.md](benchmarks/VS_REFERENCE.md)**.
 <!-- vs-reference:end -->
 
 ---

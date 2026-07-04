@@ -115,6 +115,6 @@ pnpm bench:readme             # regenerate benchmarks/VS_REFERENCE.md + README p
 node benchmarks/scripts/generate-readme-comparison.mjs --from=benchmarks/baselines/latest.json
 ```
 
-Public comparison output: [`benchmarks/VS_REFERENCE.md`](VS_REFERENCE.md) (full table). The root [`README.md`](../README.md) keeps a short pointer between `<!-- vs-reference:* -->` markers.
+Public comparison output: [`benchmarks/VS_REFERENCE.md`](VS_REFERENCE.md) (detailed tables for all scenarios). The root [`README.md`](../README.md) keeps the hero summary table between `<!-- vs-reference:* -->` markers.
 
 Legacy `pnpm benchmark:baseline:update` was removed; use `pnpm bench:reference:update`.
