@@ -306,6 +306,68 @@ Overhead validation `assembleUntrusted − assembleTrusted` : **~1.4–2.7 ms** 
 | Trusted assemble (famille 4) | **NOT VERIFIED** — ~2 ms seulement |
 | Chunked growables | **Non poursuivi** — copies élevées mais pré-scan toujours exclu |
 
-**Conclusion** : session close ; le levier principal était le parse index relaxé. Worktree contrôle `.worktrees/freeze-control` pointé sur `2d7204f` pour futures expériences.
+**Conclusion** : session close ; le levier principal était le parse index relaxé. Worktree contrôle historique `.worktrees/freeze-control` pointé sur `2d7204f` pour futures expériences.
+
+---
+
+## Session accumulateurs temporaires — spikes growable/exact-size (2026-07-05)
+
+**Objectif** : réduire le pic mémoire en priorité, puis les allocations temporaires, puis le CPU. Aucun changement d'API publique ni de format MSv5 n'est attendu.
+
+### Spikes benchés
+
+Contrôle restauré localement : `.worktrees/freeze-control` sur `80e875e` (HEAD avant changements non commités). Variantes isolées : `.worktrees/wire-writer`, `.worktrees/field-length`, `.worktrees/sparse-postings`.
+
+| Candidat | Approche | Verdict |
+|----------|----------|---------|
+| StoredFields / ExternalIds / FieldNames wire | `GrowableByteWriter`, table + heap dans un seul buffer | **REJECTED** — gains partiels, mais régressions CPU confirmées |
+| `FrozenIndexBuilder` + `fromMiniSearch` field lengths | scratch `Uint32Array` growable/exact-size + max suivi | **NOT VERIFIED** — baisse mémoire trop faible, freeze CPU mixte |
+| Sparse postings metadata | colonnes finales exact-size selon `nonEmptySlots` | **REJECTED** — mémoire neutre, freeze CPU régressif |
+
+### Harness ajoutés
+
+- `benchmarks/scripts/save-binary-ab-compare.mjs` : A/B pairé `saveBinarySync`, contrôle `.worktrees/freeze-control`, scénarios storeFields / IDs string / dictionary rebuild / synthétique IDs JSON.
+- `benchmarks/scripts/build-peak-ab-compare.mjs` : A/B pairé sur `peakHeapMb`, `peakTotalResidentMb`, `freezeDelta*`, `retainedHeapMb` pendant build incremental.
+- `benchmarks/scripts/freeze-ab-compare.mjs` accepte maintenant `--treatment-repo` pour comparer une variante isolée.
+
+### Critères de verdict
+
+- **Go mémoire** : baisse médiane ≥8 % de `peakTotalResidentMb` ou ≥5 MB absolus sur un scénario cible, sans hausse >2 % ou >2 MB sur les autres scénarios mesurés.
+- **CPU acceptable** : pas de régression médiane >5 % sur `saveBinaryMs`, `fromDocumentsMs`, `freezeMs`, ou `loadBinaryMs`; 3-5 % = warning à justifier par un gain mémoire net.
+- **No-go automatique** : bytes MSv5 différents sans justification, taille disque en hausse, parité cassée, ou captures contradictoires.
+
+### Résultats
+
+`wire-writer` — `save-binary-ab-compare.mjs --runs=15 --compression=raw`, confirmé par une seconde capture :
+
+| Scénario | Run 1 | Confirmation | Bytes |
+|----------|-------|--------------|-------|
+| divina-storeFields | −20.2 % | −18.9 % | identiques |
+| extreme-largeDocuments | **+23.4 %** | **+19.9 %** | identiques |
+| genericStringIds-100k | −49.7 % | −46.8 % | identiques |
+| saveBinaryAfterNoTerms | **+11.0 %** | **+9.6 %** | identiques |
+| synthetic-jsonIds-storeFields | −4.6 % | −13.8 % | identiques |
+
+`field-length` — `build-peak-ab-compare.mjs --runs=7` puis `freeze-ab-compare.mjs --runs=15` :
+
+| Surface | Résultat |
+|---------|----------|
+| Peak total resident | −0.28 % à −0.49 % (meilleur absolu −0.379 MB) |
+| Freeze import | giant −0.8 %, dense **+2.8 %**, docId −7.1 % |
+
+`sparse-postings` — `build-peak-ab-compare.mjs --runs=7` puis `freeze-ab-compare.mjs --runs=15` :
+
+| Surface | Résultat |
+|---------|----------|
+| Peak total resident | −0.01 % à **+0.82 %** |
+| Freeze import | giant **+4.6 %**, dense **+4.8 %**, docId **+5.4 %** |
+
+### Verdict final
+
+**Aucun candidat n'est VERIFIED.**
+
+- `wire-writer` : **REJECTED** malgré de vrais gains sur IDs string, car deux scénarios régressent au-delà du seuil CPU, dont `extreme-largeDocuments` confirmé à +19.9 %.
+- `field-length` : **NOT VERIFIED** car le gain mémoire est très loin du seuil (≤0.49 %, ≤0.379 MB) et le CPU freeze est mixte.
+- `sparse-postings` : **REJECTED** car la mémoire est neutre à légèrement pire et le CPU freeze régresse sur les trois scénarios mesurés.
 
 ---

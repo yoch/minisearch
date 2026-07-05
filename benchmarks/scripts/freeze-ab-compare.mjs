@@ -17,6 +17,7 @@ import { gc, medianOf } from '../benchmarkUtils.js'
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
 const runs = Number(process.argv.find((a) => a.startsWith('--runs='))?.split('=')[1] ?? 15)
 const mode = process.argv.find((a) => a.startsWith('--mode='))?.split('=')[1] ?? 'compare'
+const treatmentRepo = process.argv.find((a) => a.startsWith('--treatment-repo='))?.split('=')[1] ?? root
 const baselineRepo = process.argv.find((a) => a.startsWith('--baseline-repo='))?.split('=')[1]
   ?? join(root, '.worktrees/freeze-control')
 const scenarioIds = [
@@ -178,7 +179,7 @@ function printPaired(paired) {
 
 let payload
 if (mode === 'baseline') {
-  const baseline = await measureRepo(root, 'baseline')
+  const baseline = await measureRepo(treatmentRepo, 'baseline')
   payload = { capturedAt: new Date().toISOString(), runs, mode, baseline }
   console.log(`baseline @ ${baseline.commit}`)
   for (const id of scenarioIds) {
@@ -186,12 +187,12 @@ if (mode === 'baseline') {
     console.log(`  ${id}: median=${b.median} ms range ${b.min}-${b.max}`)
   }
 } else if (mode === 'paired') {
-  const paired = await measurePaired(root, baselineRepo)
+  const paired = await measurePaired(treatmentRepo, baselineRepo)
   payload = { capturedAt: new Date().toISOString(), runs, mode, paired }
   console.log(`paired treatment=${paired.treatment.commit} control=${paired.control.commit}`)
   printPaired(paired)
 } else {
-  const head = await measureRepo(root, 'HEAD')
+  const head = await measureRepo(treatmentRepo, 'HEAD')
   const baseline = await measureRepo(baselineRepo, 'baseline')
   payload = { capturedAt: new Date().toISOString(), runs, mode, head, baseline }
   printCompare(head, baseline)
