@@ -18,5 +18,8 @@
     "src/msv5/binaryMsv5Constants.ts"
   ],
   "ignoreBinaries": ["make"],
+  "ignoreDependencies": [
+    "typescript-7"
+  ],
   "ignoreExportsUsedInFile": true
 }

@@ -110,6 +110,10 @@ lint: typecheck
 knip:
 	$(RUN) knip
 
+# Typecheck uses the TypeScript 7 native CLI (`typescript-7` → `.bin/tsc`).
+# Rollup, TypeDoc, ESLint/typescript-eslint, and knip keep using the TypeScript 6
+# programmatic API via the `typescript` package alias (`@typescript/typescript6`).
+# After TypeScript 7.1 ships a stable API and tooling adopts it, unify on typescript@7.
 typecheck:
 	$(RUN) tsc --noEmit
 
@@ -354,7 +358,7 @@ help:
 	@echo ""
 	@echo "Lint:"
 	@echo "  make lint                   eslint + tsc --noEmit (src/)"
-	@echo "  make typecheck              tsc --noEmit only"
+	@echo "  make typecheck              tsc (TypeScript 7) --noEmit only"
 	@echo "  make docs-build             typedoc + demo"
 	@echo "  make docs-build-pages       typedoc GitHub Pages mode"
 	@echo ""

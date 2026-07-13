@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **TypeScript toolchain** — dual-stack for the TypeScript 7 migration: `make typecheck` uses the native TypeScript 7 CLI (`typescript-7`), while Rollup, TypeDoc, ESLint, and knip keep the TypeScript 6 programmatic API via `@typescript/typescript6` (aliased as `typescript`). Align `tsconfig.json` for 6/7 (`moduleResolution: bundler`, explicit `rootDir` / `types`, `stableTypeOrdering`, `isolatedModules`; drop deprecated `downlevelIteration`). Unify on a single `typescript@7` package once 7.1 ships a stable API and tooling adopts it (checklist: `dev/docs/TYPESCRIPT_7_MIGRATION.md`).
+
 ## v1.8.0 — `@yoch/frozenminisearch`
 
 Minor release: faster MiniSearch JSON import, tighter snapshot validation at the import boundary, and internal query-engine cleanup. No public API or MSv5 wire-format changes.

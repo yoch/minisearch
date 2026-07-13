@@ -68,7 +68,8 @@
     "tsx": "^4.22.4",
     "typedoc": "^0.28.19",
     "typedoc-plugin-rename-defaults": "^0.7.0",
-    "typescript": "^5.9.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@^7.0.2",
     "vitest": "^4.1.9"
   },
   "files": [

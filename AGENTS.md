@@ -21,6 +21,17 @@ All `package.json` scripts are thin aliases to a `Makefile` target (`make <targe
 
 Build freshness is tracked by the real file `dist/es/index.js`. Make rebuilds automatically only when that file is absent; after editing `src/*.ts`, run `make build` explicitly to refresh `dist/`.
 
+## TypeScript toolchain (dual-stack 6 + 7)
+
+Until TypeScript 7.1 exposes a stable programmatic API and ecosystem tools adopt it, this repo runs a dual-stack:
+
+- **`typescript-7`** (`npm:typescript@^7`) — native Go CLI. `make typecheck` / `pnpm exec tsc` use this binary.
+- **`typescript`** (`npm:@typescript/typescript6`) — TypeScript 6 API + `tsc6`. Required by `@rollup/plugin-typescript`, `rollup-plugin-dts`, TypeDoc, typescript-eslint (via neostandard), and knip.
+
+Do not replace `typescript` with plain `typescript@7` until those tools support the 7.x API; that would break build, docs, lint, and knip. Editor users can enable the TypeScript 7 language server for workspace diagnostics while CLI tooling stays as above.
+
+Full dual-stack rationale, measured gains, and the post-7.1 unification checklist live in [`dev/docs/TYPESCRIPT_7_MIGRATION.md`](dev/docs/TYPESCRIPT_7_MIGRATION.md).
+
 ## Coding Style & Naming Conventions
 
 This repo uses TypeScript/ES modules with neostandard plus `@stylistic/eslint-plugin`. Use 2-space indentation, single quotes, no semicolons, and 1TBS braces. Prefer explicit, domain-oriented names such as `binaryMsv5Encode`, `PackedRadixTree`, and `frozenPostings`. Keep tests named after the unit they cover, for example `src/binaryFormat.test.js`.
