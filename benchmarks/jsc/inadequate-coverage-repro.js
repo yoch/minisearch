@@ -24,30 +24,24 @@ function scorePostingDoc(results, docId, termFreq) {
 
 const results = new Map()
 
-// The standalone jsc shell can optimize the top-level driver loops themselves.
-// That adds an unrelated loop-OSR reoptimization signal and masks the generic
-// InadequateCoverage threshold used by scorePostingDoc. JSC's test shell exposes
-// noDFG(), so keep only the driver in Baseline/LLInt there. Bun does not expose
-// noDFG(), and therefore continues to execute the original top-level-loop shape.
-function insertPhase() {
-  for (let i = 0; i < INSERTS; i++)
-    scorePostingDoc(results, i, 1 + (i & 3))
-}
-
-function updatePhase() {
-  for (let i = 0; i < UPDATES; i++)
+// In the jsc shell, use one already-covered caller loop for both phases. This
+// avoids a separate late-covered driver block while allowing the caller itself
+// to tier up, matching an application host more closely. Keep scorePostingDoc
+// out-of-line so its own DFG CodeBlock and exit counter remain observable.
+function drive(count) {
+  for (let i = 0; i < count; i++)
     scorePostingDoc(results, i % INSERTS, 1 + (i & 3))
 }
 
 let elapsedMs
-if (typeof noDFG === 'function') {
-  noDFG(insertPhase)
-  noDFG(updatePhase)
-  insertPhase()
+if (typeof noInline === 'function') {
+  noInline(scorePostingDoc)
+  drive(INSERTS)
   const start = now()
-  updatePhase()
+  drive(UPDATES)
   elapsedMs = now() - start
 } else {
+  // Bun path: preserve the original two top-level phases exactly.
   for (let i = 0; i < INSERTS; i++)
     scorePostingDoc(results, i, 1 + (i & 3))
 
