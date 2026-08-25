@@ -12,6 +12,10 @@ const profiles = [
   { name: 'core', input: resolve(here, 'engineBenchEntry.ts') },
   { name: 'bdpm-shaped', input: resolve(here, 'bdpmEngineBenchEntry.ts') },
   { name: 'resident-pressure', input: resolve(here, 'residentEngineBenchEntry.ts') },
+  { name: 'issue4-r3', input: resolve(here, 'issue4Resident3Entry.ts') },
+  { name: 'issue4-r6', input: resolve(here, 'issue4Resident6Entry.ts') },
+  { name: 'issue4-r8', input: resolve(here, 'issue4Resident8Entry.ts') },
+  { name: 'issue4-r11', input: resolve(here, 'issue4Resident11Entry.ts') },
 ]
 export const outputFiles = profiles.map(profile => ({
   name: profile.name,
