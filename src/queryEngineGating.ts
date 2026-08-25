@@ -18,8 +18,24 @@ import type { QueryEngineParams } from './queryEngine'
 /** Empirical broad-exclusion cutoff: only collect first when both sides cover much of the corpus. */
 const BROAD_EXCLUSION_TWO_PHASE_MIN_FRACTION = 0.5
 
+class RawResultDocIdGate implements DocIdGate {
+  constructor(private readonly result: RawResult) {}
+
+  get size(): number {
+    return this.result.size
+  }
+
+  has(docId: number): boolean {
+    return this.result.has(docId)
+  }
+
+  [Symbol.iterator](): IterableIterator<number> {
+    return this.result.keys()
+  }
+}
+
 function gateFromResult(result: RawResult): DocIdGate {
-  return new Set(result.keys())
+  return new RawResultDocIdGate(result)
 }
 
 function intersectDocIdsInPlace(docIds: Set<number>, branchDocIds: DocIdGate): void {
