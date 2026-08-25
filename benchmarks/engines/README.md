@@ -43,6 +43,6 @@ The timing tables print median time and throughput relative to Node (`>1x` is fa
 
 Treat the numbers as a comparison of the **JS engine on these FrozenMiniSearch workloads**, not as a general Node-vs-Bun runtime benchmark: file I/O, HTTP, package loading, compression, startup, CSV/XML parsing, PM2 and long-lived server behavior are outside the measured region.
 
-The CI smoke currently pins **Node 26.7.0** and **Bun 1.4.0**. Repeated hosted-runner runs show the same qualitative resident-pressure behavior: Bun remains faster on the simple resident searches, but the multi-term resident workload reverses in favor of Node; Bun's resident-pressure peak RSS is also higher than Node's, with the magnitude varying substantially between runners.
+The CI smoke currently pins **Node 26.7.0** and tracks the **Bun canary** channel; every run prints Bun's exact revision. The canary observed on 2026-08-25 was `1.4.1-canary.1+11fb73032`. Stable Bun 1.4.0 was also tested separately. Both stable and canary show the same qualitative resident-pressure behavior: Bun remains faster on simple resident searches, while the multi-term workload reverses in favor of Node and Bun's peak RSS rises above Node's under high residency.
 
 For stable comparisons, pin CPU frequency/governor where possible, avoid mixed system load, and compare multiple complete runs. Hosted-runner absolute timings and RSS vary, so ratios within one run and repeated qualitative direction are more informative than cross-run absolutes.
