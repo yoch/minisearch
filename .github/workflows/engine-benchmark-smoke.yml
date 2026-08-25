@@ -24,4 +24,4 @@ jobs:
         with:
           bun-version: '1.4.0'
       - run: pnpm install --frozen-lockfile
-      - run: node benchmarks/engines/run.mjs
+      - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
