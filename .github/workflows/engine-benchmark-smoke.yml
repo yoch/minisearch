@@ -36,10 +36,27 @@ jobs:
             BUN_JSC_useConcurrentJIT=false \
             BUN_JSC_reportDFGCompileTimes=true \
             BUN_JSC_logCompilationChanges=true \
+            BUN_JSC_printEachOSRExit=true \
+            BUN_JSC_verboseDFGOSRExit=true \
+            bun "$file" >"${label}.jsc.out" 2>"${label}.jsc.jit"
+            cat "${label}.jsc.out"
+            echo "--- targeted JSC hot paths / exits (${label}) ---"
+            grep -Ei -B 3 -A 6 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|jettison|reoptimize' "${label}.jsc.jit" || true
+          }
+
+          trace_jsc_reopt100() {
+            label="$1"
+            file="$2"
+            echo "=== JSC ${label}: loop-reopt threshold 100 ==="
+            BUN_JSC_useFTLJIT=false \
+            BUN_JSC_useConcurrentJIT=false \
+            BUN_JSC_reportDFGCompileTimes=true \
+            BUN_JSC_logCompilationChanges=true \
+            BUN_JSC_osrExitCountForReoptimizationFromLoop=100 \
             bun "$file" >"${label}.jsc.out" 2>"${label}.jsc.jit"
             cat "${label}.jsc.out"
             echo "--- targeted JSC hot paths (${label}) ---"
-            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|jettison|reopt|deopt|OSR' "${label}.jsc.jit" || true
+            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|jettison|reoptimize' "${label}.jsc.jit" || true
           }
 
           trace_v8() {
@@ -54,6 +71,7 @@ jobs:
 
           trace_jsc resident-history benchmarks/tmp/engines/resident-pressure.js
           trace_jsc multi-only benchmarks/tmp/engines/issue4-multi-only.js
+          trace_jsc_reopt100 multi-only-reopt100 benchmarks/tmp/engines/issue4-multi-only.js
           trace_v8 resident-history benchmarks/tmp/engines/resident-pressure.js
           trace_v8 multi-only benchmarks/tmp/engines/issue4-multi-only.js
 
