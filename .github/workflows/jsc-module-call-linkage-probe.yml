@@ -22,25 +22,32 @@ jobs:
           tar -xzf /tmp/bun-webkit.tar.gz
           test -x bun-webkit/bin/jsc
 
-      - name: Compare module lexical call with global-property call
+      - name: Compare caller/linkage variants
         shell: bash
         run: |
           set -euo pipefail
           JSC="$PWD/bun-webkit/bin/jsc"
           SCRIPT="$PWD/benchmarks/jsc/inadequate-coverage-repro.js"
           GLOBAL_CALL="$RUNNER_TEMP/inadequate-coverage-global-call.js"
+          BASELINE_CALLER="$RUNNER_TEMP/inadequate-coverage-baseline-caller.js"
+          STRICT_SCRIPT="$RUNNER_TEMP/inadequate-coverage-strict-script.js"
 
-          # Preserve the exact same module-defined scorePostingDoc function, but expose
-          # the function object through globalThis and make only drive() dispatch via
-          # a global-property lookup. This isolates callee call linkage from callee code.
+          # Same module callee, but dispatch through a stable global property.
           awk '
             { print }
             $0 == "const results = new Map()" { print "globalThis.__scorePostingDoc = scorePostingDoc" }
           ' "$SCRIPT" | sed 's/^    scorePostingDoc(results,/    globalThis.__scorePostingDoc(results,/' > "$GLOBAL_CALL"
 
+          # Keep only drive() out of DFG while leaving scorePostingDoc fully tierable.
+          sed '/^drive(false, INSERTS)$/i if (typeof noDFG === '\''function'\'') noDFG(drive)' "$SCRIPT" > "$BASELINE_CALLER"
+
+          printf "'use strict';\n" > "$STRICT_SCRIPT"
+          cat "$SCRIPT" >> "$STRICT_SCRIPT"
+
           run_case() {
             label="$1"
             file="$2"
+            mode="$3"
             args=(
               --useFTLJIT=false
               --useConcurrentJIT=false
@@ -51,38 +58,47 @@ jobs:
               --verboseOSR=true
               --verboseCallLink=true
             )
-            "$JSC" "${args[@]}" --module-file="$file" >"${label}.all" 2>&1
+            if [ "$mode" = module ]; then
+              "$JSC" "${args[@]}" --module-file="$file" >"${label}.all" 2>&1
+            else
+              "$JSC" "${args[@]}" "$file" >"${label}.all" 2>&1
+            fi
             exits=$(grep -c 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" || true)
             max=$(grep 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
-            dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.all" || true)
+            score_dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.all" || true)
+            drive_dfg=$(grep -c 'Optimized drive' "${label}.all" || true)
             repro=$(grep '^REPRO ' "${label}.all" | tail -1 || true)
-            echo "LINKAGE ${label} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} dfg_compiles=${dfg}"
+            echo "LINKAGE ${label} mode=${mode} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} score_dfg=${score_dfg} drive_dfg=${drive_dfg}"
             echo "--- ${label} call/reoptimization markers ---"
-            grep -E 'scorePostingDoc|drive|CallLink|call link|OSR entry|reoptim|Jettison|Speculation failure' "${label}.all" | head -240 || true
+            grep -E 'scorePostingDoc|drive|CallLink|call link|OSR entry|reoptim|Jettison|Speculation failure' "${label}.all" | head -260 || true
           }
 
-          run_case module-lexical "$SCRIPT"
-          run_case module-global-property "$GLOBAL_CALL"
+          run_case module-lexical "$SCRIPT" module
+          run_case module-global-property "$GLOBAL_CALL" module
+          run_case module-baseline-caller "$BASELINE_CALLER" module
+          run_case strict-script "$STRICT_SCRIPT" script
 
-      - name: Dump DFG parsing graphs for the two callers
+      - name: Compare DFG caller graphs
         shell: bash
         run: |
           set -euo pipefail
           JSC="$PWD/bun-webkit/bin/jsc"
           SCRIPT="$PWD/benchmarks/jsc/inadequate-coverage-repro.js"
-          GLOBAL_CALL="$RUNNER_TEMP/inadequate-coverage-global-call.js"
+          STRICT_SCRIPT="$RUNNER_TEMP/inadequate-coverage-strict-script.js"
+          printf "'use strict';\n" > "$STRICT_SCRIPT"
+          cat "$SCRIPT" >> "$STRICT_SCRIPT"
           args=(
             --useFTLJIT=false
             --useConcurrentJIT=false
             --dumpGraphAfterParsing=true
             --logCompilationChanges=true
           )
-          "$JSC" "${args[@]}" --module-file="$SCRIPT" >module-lexical-graph.all 2>&1
-          "$JSC" "${args[@]}" --module-file="$GLOBAL_CALL" >module-global-property-graph.all 2>&1
-          echo '--- lexical drive graph call nodes ---'
-          grep -E 'drive#|Call|DirectCall|GetById|GetFromScope|GetGlobal' module-lexical-graph.all | head -200 || true
-          echo '--- global-property drive graph call nodes ---'
-          grep -E 'drive#|Call|DirectCall|GetById|GetFromScope|GetGlobal' module-global-property-graph.all | head -200 || true
+          "$JSC" "${args[@]}" --module-file="$SCRIPT" >module-graph.all 2>&1
+          "$JSC" "${args[@]}" "$STRICT_SCRIPT" >strict-script-graph.all 2>&1
+          echo '--- module drive graph call nodes ---'
+          grep -E 'DFG for drive#|FilterCallLinkStatus|DirectCall|Call\(' module-graph.all | head -220 || true
+          echo '--- strict script drive graph call nodes ---'
+          grep -E 'DFG for drive#|FilterCallLinkStatus|DirectCall|Call\(' strict-script-graph.all | head -220 || true
 
       - name: Upload linkage logs
         if: always()
