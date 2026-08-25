@@ -1,0 +1,5 @@
+baseline_jsc: bun-webkit autobuild-cb61607f1a4bae79d7701965062634dee9efb349
+patched_jsc_source: oven-sh/WebKit cb61607f1a4bae79d7701965062634dee9efb349 + InadequateCoverage patch
+patched_jsc_binary: /tmp/jsc-build-patched/bin/jsc
+upstream_webkit_head_consulted: 396f000caabcc215d7cce0ffc5f5663352812a38
+bun_version: 1.4.1-canary.1+11fb73032

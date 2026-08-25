@@ -1,0 +1,12 @@
+Fair A/B — same local JSCOnly Release build (cb61607f + USE_BUN_JSC_ADDITIONS=ON)
+
+case                         ftl    unpatched_ms  patched_ms  exits        delta
+01-phase-change              false      13.749       6.383    101→6        -53.6%
+06-phase-change-ftl          true       21.379      14.364    101→6        -32.8%
+03-oscillate                 false      18.265       8.939    101→6        -51.1%
+04-multi-uncovered           false      54.236       6.927    703→38       -87.2%
+05-cold-insert-only          false      22.317      25.589    0→0          noise (see cold-*-x15)
+
+Cold x15 follow-up:
+  unpatched median=20.125 mean=22.712 min=17.632 max=34.384
+  patched   median=21.975 mean=23.439 min=17.924 max=29.675

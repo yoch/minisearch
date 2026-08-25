@@ -1,0 +1,52 @@
+diff --git a/Source/JavaScriptCore/dfg/DFGOSRExitCompilerCommon.cpp b/Source/JavaScriptCore/dfg/DFGOSRExitCompilerCommon.cpp
+index 4e1aca52af..2c459a0a27 100644
+--- a/Source/JavaScriptCore/dfg/DFGOSRExitCompilerCommon.cpp
++++ b/Source/JavaScriptCore/dfg/DFGOSRExitCompilerCommon.cpp
+@@ -103,6 +103,18 @@ void handleExitCounts(VM& vm, CCallHelpers& jit, const OSRExitBase& exit)
+         
+         done.link(&jit);
+     }
++
++    // InadequateCoverage means we planted ForceOSRExit for bytecode with no
++    // value profile. Once that path runs, exits are deterministic until we
++    // reoptimize — similar in spirit to being stuck failing in a loop. Use the
++    // more aggressive loop threshold so phase changes adapt without waiting for
++    // the full generic exit budget (~100).
++    if (exit.m_kind == InadequateCoverage) {
++        jit.move(
++            AssemblyHelpers::TrustedImm32(
++                jit.codeBlock()->exitCountThresholdForReoptimizationFromLoop()),
++            GPRInfo::regT1);
++    }
+     
+     tooFewFails = jit.branch32(AssemblyHelpers::BelowOrEqual, GPRInfo::regT2, GPRInfo::regT1);
+     
+diff --git a/Source/JavaScriptCore/dfg/DFGOperations.cpp b/Source/JavaScriptCore/dfg/DFGOperations.cpp
+index 592e999cff..80f6b6a9f7 100644
+--- a/Source/JavaScriptCore/dfg/DFGOperations.cpp
++++ b/Source/JavaScriptCore/dfg/DFGOperations.cpp
+@@ -6631,15 +6631,22 @@ JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationTriggerReoptimizationNow, void, (Code
+         }
+     }
+ 
+-    // In order to trigger reoptimization, one of two things must have happened:
++    // In order to trigger reoptimization, one of the following must have happened:
+     // 1) We exited more than some number of times.
+     // 2) We exited and got stuck in a loop, and now we're exiting again.
++    // 3) We repeatedly hit InadequateCoverage (ForceOSRExit for unprofiled
++    //    bytecode). These exits keep firing until recompile, so the loop
++    //    threshold is the appropriate bar — keep this in sync with
++    //    handleExitCounts.
+     bool didExitABunch = optimizedCodeBlock->shouldReoptimizeNow();
+     bool didGetStuckInLoop =
+         (codeBlock->checkIfOptimizationThresholdReached() || didTryToEnterIntoInlinedLoops)
+         && optimizedCodeBlock->shouldReoptimizeFromLoopNow();
++    bool didExitFromInadequateCoverage =
++        exit && exit->m_kind == InadequateCoverage
++        && optimizedCodeBlock->shouldReoptimizeFromLoopNow();
+     
+-    if (!didExitABunch && !didGetStuckInLoop) {
++    if (!didExitABunch && !didGetStuckInLoop && !didExitFromInadequateCoverage) {
+         dataLogLnIf(Options::verboseOSR(), *codeBlock, ": Not reoptimizing ", *optimizedCodeBlock, " because it either didn't exit enough or didn't loop enough after exit.");
+         codeBlock->optimizeAfterLongWarmUp();
+         return;

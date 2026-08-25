@@ -1,0 +1,104 @@
+=== 01-phase-change ftl=false thr=100 ===
+  rep1 elapsed=29.473543 exits~101
+  rep2 elapsed=25.337458 exits~101
+  rep3 elapsed=22.739410 exits~101
+  rep4 elapsed=26.167631 exits~101
+  rep5 elapsed=16.043663 exits~101
+  rep6 elapsed=12.100697 exits~101
+  rep7 elapsed=12.287378 exits~101
+=== 01-phase-change ftl=false thr=5 ===
+  rep1 elapsed=5.975008 exits~6
+  rep2 elapsed=5.938530 exits~6
+  rep3 elapsed=5.903244 exits~6
+  rep4 elapsed=5.882025 exits~6
+  rep5 elapsed=5.863190 exits~6
+  rep6 elapsed=5.985737 exits~6
+  rep7 elapsed=5.885839 exits~6
+=== 01-phase-change ftl=false thr=1 ===
+  rep1 elapsed=5.639791 exits~2
+  rep2 elapsed=5.497217 exits~2
+  rep3 elapsed=5.447865 exits~2
+  rep4 elapsed=5.582571 exits~2
+  rep5 elapsed=5.451441 exits~2
+  rep6 elapsed=5.592346 exits~2
+  rep7 elapsed=5.455017 exits~2
+=== 05-cold-insert-only ftl=false thr=100 ===
+  rep1 elapsed=28.557777 exits~0
+  rep2 elapsed=21.588087 exits~0
+  rep3 elapsed=20.406723 exits~0
+  rep4 elapsed=19.812822 exits~0
+  rep5 elapsed=19.960403 exits~0
+  rep6 elapsed=19.975901 exits~0
+  rep7 elapsed=19.947767 exits~0
+=== 05-cold-insert-only ftl=false thr=5 ===
+  rep1 elapsed=19.887686 exits~0
+  rep2 elapsed=20.376444 exits~0
+  rep3 elapsed=20.830631 exits~0
+  rep4 elapsed=19.916534 exits~0
+  rep5 elapsed=19.915819 exits~0
+  rep6 elapsed=19.894361 exits~0
+  rep7 elapsed=20.100832 exits~0
+=== 06-phase-change-ftl ftl=true thr=100 ===
+  rep1 elapsed=21.982431 exits~101
+  rep2 elapsed=20.194054 exits~101
+  rep3 elapsed=20.174503 exits~101
+  rep4 elapsed=20.025730 exits~101
+  rep5 elapsed=21.838665 exits~101
+  rep6 elapsed=20.095110 exits~101
+  rep7 elapsed=19.907713 exits~101
+=== 06-phase-change-ftl ftl=true thr=5 ===
+  rep1 elapsed=13.893843 exits~6
+  rep2 elapsed=13.923883 exits~6
+  rep3 elapsed=13.818979 exits~6
+  rep4 elapsed=13.919592 exits~6
+  rep5 elapsed=13.770103 exits~6
+  rep6 elapsed=13.848305 exits~6
+  rep7 elapsed=13.903379 exits~6
+=== 03-oscillate ftl=false thr=100 ===
+  rep1 elapsed=15.104532 exits~101
+  rep2 elapsed=14.634848 exits~101
+  rep3 elapsed=15.101194 exits~101
+  rep4 elapsed=14.651775 exits~101
+  rep5 elapsed=14.559984 exits~101
+  rep6 elapsed=14.794111 exits~101
+  rep7 elapsed=19.086599 exits~101
+=== 03-oscillate ftl=false thr=5 ===
+  rep1 elapsed=8.625507 exits~6
+  rep2 elapsed=8.288383 exits~6
+  rep3 elapsed=8.399963 exits~6
+  rep4 elapsed=8.502245 exits~6
+  rep5 elapsed=8.427143 exits~6
+  rep6 elapsed=8.454084 exits~6
+  rep7 elapsed=8.331299 exits~6
+=== 02-rare-once ftl=false thr=100 ===
+  rep1 elapsed= exits~0
+  rep2 elapsed= exits~0
+  rep3 elapsed= exits~0
+  rep4 elapsed= exits~0
+  rep5 elapsed= exits~0
+  rep6 elapsed= exits~0
+  rep7 elapsed= exits~0
+=== 02-rare-once ftl=false thr=5 ===
+  rep1 elapsed= exits~0
+  rep2 elapsed= exits~0
+  rep3 elapsed= exits~0
+  rep4 elapsed= exits~0
+  rep5 elapsed= exits~0
+  rep6 elapsed= exits~0
+  rep7 elapsed= exits~0
+=== 04-multi-uncovered ftl=false thr=100 ===
+  rep1 elapsed=50.173283 exits~703
+  rep2 elapsed=49.327135 exits~703
+  rep3 elapsed=50.281525 exits~703
+  rep4 elapsed=50.220013 exits~703
+  rep5 elapsed=50.006866 exits~703
+  rep6 elapsed=50.951719 exits~703
+  rep7 elapsed=49.980640 exits~703
+=== 04-multi-uncovered ftl=false thr=5 ===
+  rep1 elapsed=7.904768 exits~38
+  rep2 elapsed=7.950544 exits~38
+  rep3 elapsed=16.525984 exits~38
+  rep4 elapsed=16.197681 exits~38
+  rep5 elapsed=21.603107 exits~38
+  rep6 elapsed=13.372660 exits~38
+  rep7 elapsed=16.372204 exits~38

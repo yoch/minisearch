@@ -1,0 +1,17 @@
+SHA_jsc_binary: bun-webkit autobuild-cb61607f1a4bae79d7701965062634dee9efb349
+Note: thr=5 is a PROXY for the candidate patch (patch only special-cases InadequateCoverage).
+
+case                                     ftl   thr   median_ms  exits   n
+01-phase-change                          false 100      22.739    101   7
+01-phase-change                          false 5         5.903      6   7
+01-phase-change                          false 1         5.497      2   7
+05-cold-insert-only                      false 100      19.976      0   7
+05-cold-insert-only                      false 5        19.917      0   7
+06-phase-change-ftl                      true  100      20.175    101   7
+06-phase-change-ftl                      true  5        13.894      6   7
+03-oscillate                             false 100      14.794    101   7
+03-oscillate                             false 5         8.427      6   7
+02-rare-once                             false 100         n/a      0   7
+02-rare-once                             false 5           n/a      0   7
+04-multi-uncovered                       false 100      50.173    703   7
+04-multi-uncovered                       false 5        16.198     38   7

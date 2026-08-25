@@ -1,0 +1,40 @@
+=== local-unpatched 01-phase-change ftl=false ===
+  rep1 elapsed=15.338182 exits~101
+  rep2 elapsed=12.779236 exits~101
+  rep3 elapsed=13.749123 exits~101
+  rep4 elapsed=13.055563 exits~101
+  rep5 elapsed=14.604092 exits~101
+  rep6 elapsed=14.848948 exits~101
+  rep7 elapsed=12.846708 exits~101
+=== local-unpatched 06-phase-change-ftl ftl=true ===
+  rep1 elapsed=20.730734 exits~101
+  rep2 elapsed=20.419836 exits~101
+  rep3 elapsed=21.878958 exits~101
+  rep4 elapsed=21.361828 exits~101
+  rep5 elapsed=21.724463 exits~101
+  rep6 elapsed=21.379232 exits~101
+  rep7 elapsed=23.194790 exits~101
+=== local-unpatched 03-oscillate ftl=false ===
+  rep1 elapsed=18.265247 exits~101
+  rep2 elapsed=16.507149 exits~101
+  rep3 elapsed=18.739462 exits~101
+  rep4 elapsed=16.170502 exits~101
+  rep5 elapsed=18.793821 exits~101
+  rep6 elapsed=16.466379 exits~101
+  rep7 elapsed=18.288136 exits~101
+=== local-unpatched 05-cold-insert-only ftl=false ===
+  rep1 elapsed=24.727345 exits~0
+  rep2 elapsed=23.715496 exits~0
+  rep3 elapsed=22.140741 exits~0
+  rep4 elapsed=28.618574 exits~0
+  rep5 elapsed=19.777298 exits~0
+  rep6 elapsed=22.317171 exits~0
+  rep7 elapsed=20.990372 exits~0
+=== local-unpatched 04-multi-uncovered ftl=false ===
+  rep1 elapsed=54.375887 exits~703
+  rep2 elapsed=54.236412 exits~703
+  rep3 elapsed=62.649012 exits~703
+  rep4 elapsed=53.249836 exits~703
+  rep5 elapsed=54.455280 exits~703
+  rep6 elapsed=53.383827 exits~703
+  rep7 elapsed=53.425074 exits~703

@@ -1,0 +1,48 @@
+=== PATCHED 01-phase-change ftl=false ===
+  rep1 elapsed=6.197214 exits~6
+  rep2 elapsed=6.362915 exits~6
+  rep3 elapsed=6.429434 exits~6
+  rep4 elapsed=6.602287 exits~6
+  rep5 elapsed=6.241560 exits~6
+  rep6 elapsed=6.464958 exits~6
+  rep7 elapsed=6.143570 exits~6
+=== PATCHED 06-phase-change-ftl ftl=true ===
+  rep1 elapsed=15.736341 exits~6
+  rep2 elapsed=14.023542 exits~6
+  rep3 elapsed=14.064312 exits~6
+  rep4 elapsed=15.297890 exits~6
+  rep5 elapsed=13.875961 exits~6
+  rep6 elapsed=14.148235 exits~6
+  rep7 elapsed=15.454769 exits~6
+=== PATCHED 03-oscillate ftl=false ===
+  rep1 elapsed=11.749029 exits~6
+  rep2 elapsed=10.495186 exits~6
+  rep3 elapsed=10.334492 exits~6
+  rep4 elapsed=10.107756 exits~6
+  rep5 elapsed=11.953115 exits~6
+  rep6 elapsed=12.140512 exits~6
+  rep7 elapsed=9.459257 exits~6
+=== PATCHED 05-cold-insert-only ftl=false ===
+  rep1 elapsed=35.257578 exits~0
+  rep2 elapsed=25.892496 exits~0
+  rep3 elapsed=27.424097 exits~0
+  rep4 elapsed=25.547028 exits~0
+  rep5 elapsed=22.655725 exits~0
+  rep6 elapsed=29.149771 exits~0
+  rep7 elapsed=32.205582 exits~0
+=== PATCHED 04-multi-uncovered ftl=false ===
+  rep1 elapsed=7.702112 exits~38
+  rep2 elapsed=6.905317 exits~38
+  rep3 elapsed=7.610321 exits~38
+  rep4 elapsed=6.908178 exits~38
+  rep5 elapsed=7.590294 exits~38
+  rep6 elapsed=6.921768 exits~38
+  rep7 elapsed=7.117510 exits~38
+=== PATCHED 02-rare-once ftl=false ===
+  rep1 elapsed= exits~0
+  rep2 elapsed= exits~0
+  rep3 elapsed= exits~0
+  rep4 elapsed= exits~0
+  rep5 elapsed= exits~0
+  rep6 elapsed= exits~0
+  rep7 elapsed= exits~0

@@ -1,0 +1,15 @@
+2026-08-25  Cursor Agent  <agent@cursor>
+
+        Reoptimize sooner on InadequateCoverage OSR exits.
+        https://bugs.webkit.org/show_bug.cgi?id=XXXXX
+
+        InadequateCoverage exits are produced by ForceOSRExit for bytecode that
+        had no value-profile coverage. Once that path is hot, every execution
+        exits until reoptimization. Counting them toward the generic
+        osrExitCountForReoptimization (~100) delays phase-change recovery.
+        Use osrExitCountForReoptimizationFromLoop (default 5) instead.
+
+        * dfg/DFGOSRExitCompilerCommon.cpp:
+        (JSC::DFG::handleExitCounts):
+        * dfg/DFGOperations.cpp:
+        (JSC::DFG::operationTriggerReoptimizationNow):
