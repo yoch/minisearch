@@ -7,7 +7,7 @@ source = path.read_text()
 
 def sub_once(pattern: str, replacement: str, *, expected: int = 1) -> None:
     global source
-    source, count = re.subn(pattern, replacement, source, flags=re.S)
+    source, count = re.subn(pattern, replacement, source, flags=re.S | re.M)
     if count != expected:
         raise SystemExit(f'expected {expected} replacements, got {count}: {pattern[:100]!r}')
 
@@ -86,34 +86,9 @@ sub_once(
   const bm25 = bm25FieldConstants(bm25params, context.avgFieldLength[fieldId])
   const hoistedIdf = bm25Idf(matchingFields, context.documentCount)
   const scoreMultiplier = termWeight * termBoost * fieldBoost
-  const resolvedDerivedTerm = resolveDerivedTerm(derivedTerm, context)
+  let resolvedDerivedTerm = typeof derivedTerm === 'string' ? derivedTerm : undefined
   const { docIds, freqs, offset, length } = list
 """,
-)
-
-sub_once(
-    r"scorePostingDoc\(\s*"
-    r"sourceTerm, derivedTerm, field, fieldId, docId, freqs\[index\],\s*"
-    r"termWeight, termBoost, fieldBoost, matchingFields,\s*"
-    r"context, boostDocumentFn, bm25, results, derivedTermCache,\s*"
-    r"hoistedIdf,\s*\)",
-    """scorePostingDoc(
-        sourceTerm, resolvedDerivedTerm, field, fieldId, docId, freqs[index],
-        scoreMultiplier, context, boostDocumentFn, bm25, hoistedIdf, results,
-      )""",
-)
-
-sub_once(
-    r"scorePostingDoc\(\s*"
-    r"sourceTerm, derivedTerm, field, fieldId, docId, termFreq,\s*"
-    r"termWeight, termBoost, fieldBoost, matchingFields,\s*"
-    r"context, boostDocumentFn, bm25, results, derivedTermCache,\s*"
-    r"hoistedIdf,\s*\)",
-    """scorePostingDoc(
-      sourceTerm, resolvedDerivedTerm, field, fieldId, docId, termFreq,
-      scoreMultiplier, context, boostDocumentFn, bm25, hoistedIdf, results,
-    )""",
-    expected=2,
 )
 
 sub_once(
@@ -125,9 +100,37 @@ sub_once(
     const bm25 = bm25FieldConstants(bm25params, context.avgFieldLength[fieldId])
     const hoistedIdf = bm25Idf(matchingFields, context.documentCount)
     const scoreMultiplier = termWeight * termBoost * fieldBoost
-    const resolvedDerivedTerm = resolveDerivedTerm(derivedTerm, context)
+    let resolvedDerivedTerm = typeof derivedTerm === 'string' ? derivedTerm : undefined
 """,
 )
+
+call_pattern = re.compile(
+    r"^(?P<indent> +)scorePostingDoc\(\s*"
+    r"sourceTerm, derivedTerm, field, fieldId, docId, (?P<freq>freqs\[index\]|termFreq),\s*"
+    r"termWeight, termBoost, fieldBoost, matchingFields,\s*"
+    r"context, boostDocumentFn, bm25, results, derivedTermCache,\s*"
+    r"hoistedIdf,\s*\)",
+    flags=re.S | re.M,
+)
+
+
+def replace_call(match: re.Match[str]) -> str:
+    indent = match.group('indent')
+    freq = match.group('freq')
+    return (
+        f"{indent}if (resolvedDerivedTerm === undefined) {{\n"
+        f"{indent}  resolvedDerivedTerm = resolveDerivedTerm(derivedTerm, context)\n"
+        f"{indent}}}\n"
+        f"{indent}scorePostingDoc(\n"
+        f"{indent}  sourceTerm, resolvedDerivedTerm, field, fieldId, docId, {freq},\n"
+        f"{indent}  scoreMultiplier, context, boostDocumentFn, bm25, hoistedIdf, results,\n"
+        f"{indent})"
+    )
+
+
+source, call_count = call_pattern.subn(replace_call, source)
+if call_count != 3:
+    raise SystemExit(f'expected 3 scorePostingDoc call replacements, got {call_count}')
 
 if 'derivedTermCache' in source or 'getDerivedTerm(' in source:
     raise SystemExit('stale derived-term hot-path code remains after transform')
