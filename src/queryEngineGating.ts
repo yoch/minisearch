@@ -19,17 +19,7 @@ import type { QueryEngineParams } from './queryEngine'
 const BROAD_EXCLUSION_TWO_PHASE_MIN_FRACTION = 0.5
 
 function gateFromResult(result: RawResult): DocIdGate {
-  return {
-    get size() {
-      return result.size
-    },
-    has(docId) {
-      return result.has(docId)
-    },
-    [Symbol.iterator]() {
-      return result.keys()
-    },
-  }
+  return result
 }
 
 function intersectDocIdsInPlace(docIds: Set<number>, branchDocIds: DocIdGate): void {
@@ -39,11 +29,11 @@ function intersectDocIdsInPlace(docIds: Set<number>, branchDocIds: DocIdGate): v
 }
 
 function subtractDocIdsInPlace(docIds: Set<number>, excludedDocIds: DocIdGate): void {
-  for (const docId of excludedDocIds) docIds.delete(docId)
+  for (const docId of excludedDocIds.keys()) docIds.delete(docId)
 }
 
 function subtractDocIdsFromResult(result: RawResult, excludedDocIds: DocIdGate): void {
-  for (const docId of excludedDocIds) result.delete(docId)
+  for (const docId of excludedDocIds.keys()) result.delete(docId)
 }
 
 function twoPhasePostingLengths<T>(

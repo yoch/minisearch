@@ -228,7 +228,7 @@ function collectDocIdsFromFrozenSegment(
   allowedDocs?: DocIdGate,
 ): void {
   if (allowedDocs != null && shouldSeekAllowedDocs(allowedDocs.size, length)) {
-    for (const docId of allowedDocs) {
+    for (const docId of allowedDocs.keys()) {
       if (findDocIndexInSortedSegment(allDocIds, offset, length, docId) >= 0) {
         docIds.add(docId)
       }

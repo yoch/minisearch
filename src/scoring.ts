@@ -32,9 +32,10 @@ export interface RawResultValue {
 export type RawResult = Map<number, RawResultValue>
 
 /** Minimal docId membership view used by gated query execution. */
-export interface DocIdGate extends Iterable<number> {
+export interface DocIdGate {
   readonly size: number
   has(docId: number): boolean
+  keys(): IterableIterator<number>
 }
 
 /** Posting list for one (term, field): docId -> term frequency */
@@ -243,7 +244,7 @@ function aggregateSegmentPostingList(
   const derivedTermCache: { value?: string } = {}
 
   if (allowedDocs != null && shouldSeekAllowedDocs(allowedDocs.size, length)) {
-    for (const docId of allowedDocs) {
+    for (const docId of allowedDocs.keys()) {
       const index = findDocIndexInSortedSegment(docIds, offset, length, docId)
       if (index < 0) continue
 
@@ -332,7 +333,7 @@ function collectDocIdsFromSegmentPostingList(
 ): void {
   const { docIds: ids, offset, length } = list
   if (allowedDocs != null && shouldSeekAllowedDocs(allowedDocs.size, length)) {
-    for (const docId of allowedDocs) {
+    for (const docId of allowedDocs.keys()) {
       if (findDocIndexInSortedSegment(ids, offset, length, docId) >= 0) {
         docIds.add(docId)
       }
