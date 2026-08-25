@@ -16,6 +16,7 @@ const profiles = [
   { name: 'issue4-r6', input: resolve(here, 'issue4Resident6Entry.ts') },
   { name: 'issue4-r8', input: resolve(here, 'issue4Resident8Entry.ts') },
   { name: 'issue4-r11', input: resolve(here, 'issue4Resident11Entry.ts') },
+  { name: 'issue4-multi-only', input: resolve(here, 'issue4ResidentMultiOnlyEntry.ts') },
 ]
 export const outputFiles = profiles.map(profile => ({
   name: profile.name,
