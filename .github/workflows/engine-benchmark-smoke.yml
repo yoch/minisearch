@@ -25,12 +25,24 @@ jobs:
           bun-version: canary
       - run: pnpm install --frozen-lockfile
       - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
-      - name: Issue 4 JSC tier controls
+      - name: Issue 4 JSC history controls
         shell: bash
         run: |
-          echo '=== resident-pressure: Bun with FTL disabled ==='
-          BUN_JSC_useFTLJIT=false /usr/bin/time -v bun benchmarks/tmp/engines/resident-pressure.js
-          echo '=== resident-pressure: Bun with DFG disabled ==='
-          BUN_JSC_useDFGJIT=false /usr/bin/time -v bun benchmarks/tmp/engines/resident-pressure.js
-          echo '=== resident-pressure: Bun with all JIT disabled ==='
-          BUN_JSC_useJIT=false /usr/bin/time -v bun benchmarks/tmp/engines/resident-pressure.js
+          run_pair() {
+            label="$1"
+            shift
+            echo "=== ${label}: resident history ==="
+            env "$@" bun benchmarks/tmp/engines/resident-pressure.js
+            echo "=== ${label}: multi only ==="
+            env "$@" bun benchmarks/tmp/engines/issue4-multi-only.js
+          }
+
+          run_pair 'FTL disabled' BUN_JSC_useFTLJIT=false
+          run_pair 'DFG disabled' BUN_JSC_useDFGJIT=false
+          run_pair 'concurrent JIT disabled' BUN_JSC_useConcurrentJIT=false
+          run_pair 'DFG OSR entry disabled' BUN_JSC_useOSREntryToDFG=false
+          run_pair 'inlining disabled' BUN_JSC_maximumInliningDepth=1
+          run_pair 'polymorphic call inlining disabled' BUN_JSC_usePolymorphicCallInlining=false
+          run_pair 'polyvariant devirtualization disabled' BUN_JSC_usePolyvariantDevirtualization=false
+          run_pair 'access inlining disabled' BUN_JSC_useAccessInlining=false
+          run_pair 'earlier tiering' BUN_JSC_jitPolicyScale=0.25
