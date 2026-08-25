@@ -171,7 +171,7 @@ function printProfileTable (runs, profile) {
   const workloads = refProfile.workloads
   console.log(`\nProfile: ${profile.name} — ${profile.corpus.documents} docs, ${profile.corpus.terms} terms`)
   console.log(`Reference: ${reference.name} (${reference.version})\n`)
-  const width = 18
+  const width = Math.max(18, ...workloads.map(value => value.length + 2))
   console.log(['engine', ...workloads].map(value => value.padEnd(width)).join(''))
   console.log('-'.repeat(width * (workloads.length + 1)))
   for (const run of runs) {
@@ -193,7 +193,7 @@ function printMemoryTable (runs) {
   if (!hasMemory) return
 
   console.log('\nOS peak RSS by isolated profile (GNU time; lower is better)')
-  const width = 25
+  const width = Math.max(25, ...profiles.map(value => value.length + 2))
   console.log(['engine', ...profiles].map(value => value.padEnd(width)).join(''))
   console.log('-'.repeat(width * (profiles.length + 1)))
   for (const run of runs) {
