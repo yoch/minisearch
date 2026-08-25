@@ -8,6 +8,7 @@ import { rollup } from 'rollup'
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '../..')
 const input = resolve(here, 'engineBenchEntry.ts')
+const typescriptOutDir = resolve(root, 'benchmarks/tmp/engines/ts')
 export const outputFile = resolve(root, 'benchmarks/tmp/engines/frozen-engine-bench.js')
 
 const forbiddenRuntimeTokens = [
@@ -60,6 +61,7 @@ export async function buildEngineBundle () {
           'src/**/*.js',
         ],
         compilerOptions: {
+          outDir: typescriptOutDir,
           sourceMap: false,
           declaration: false,
           declarationMap: false,
