@@ -56,3 +56,13 @@ jobs:
           trace_jsc multi-only benchmarks/tmp/engines/issue4-multi-only.js
           trace_v8 resident-history benchmarks/tmp/engines/resident-pressure.js
           trace_v8 multi-only benchmarks/tmp/engines/issue4-multi-only.js
+
+          echo '=== V8 aggregateSegmentPostingList bytecode ==='
+          node --print-bytecode --print-bytecode-filter=aggregateSegmentPostingList \
+            benchmarks/tmp/engines/issue4-multi-only.js >aggregate.bytecode.log 2>&1
+          grep -E -B 7 -A 7 '@[[:space:]]+(19|306|356)[[:space:]]' aggregate.bytecode.log || true
+
+          echo '=== V8 scorePostingDoc bytecode ==='
+          node --print-bytecode --print-bytecode-filter=scorePostingDoc \
+            benchmarks/tmp/engines/issue4-multi-only.js >score.bytecode.log 2>&1
+          grep -E -B 7 -A 7 '@[[:space:]]+(19|42|61|162|313)[[:space:]]' score.bytecode.log || true
