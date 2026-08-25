@@ -1,0 +1,59 @@
+name: JSC inadequate-coverage reproducer
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/jsc/inadequate-coverage-repro.js'
+      - '.github/workflows/jsc-inadequate-coverage-repro.yml'
+
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+
+      - name: Run compact JSC reproducer
+        shell: bash
+        run: |
+          echo "Bun version: $(bun --version)"
+          echo "Bun revision: $(bun --revision 2>/dev/null || echo unknown)"
+
+          run_case() {
+            label="$1"
+            threshold="$2"
+
+            if [ -n "$threshold" ]; then
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              BUN_JSC_osrExitCountForReoptimization="$threshold" \
+              bun benchmarks/jsc/inadequate-coverage-repro.js >"${label}.out" 2>"${label}.jit"
+            else
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              bun benchmarks/jsc/inadequate-coverage-repro.js >"${label}.out" 2>"${label}.jit"
+            fi
+
+            repro=$(grep '^REPRO ' "${label}.out" || true)
+            exits=$(grep -c 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.jit" || true)
+            max=$(grep 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.jit" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
+            dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.jit" || true)
+            bytecode=$(grep -m1 -E 'scorePostingDoc#.*instructions size|Parsing scorePostingDoc#' "${label}.jit" || true)
+
+            echo "RESULT ${label} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} dfg_compiles=${dfg}"
+            [ -n "$bytecode" ] && echo "BYTECODE ${label} ${bytecode}"
+          }
+
+          run_case default ''
+          run_case reopt1 1
+          run_case reopt1000 1000
