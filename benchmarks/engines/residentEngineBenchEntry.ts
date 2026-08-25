@@ -11,6 +11,7 @@ import {
   type AggregateContext,
 } from '../../src/scoring'
 import type { Options, Query, SearchOptions, SearchResult } from '../../src/searchTypes'
+import type { FieldLengthArray } from '../../src/fieldLengthMatrix'
 
 const REPORT_PREFIX = '@@FROZEN_ENGINE_BENCH@@'
 const SEARCH_SAMPLES = 7
@@ -85,6 +86,15 @@ type ResidentIndex = {
   index: EngineIndex
 }
 
+type ResidentAggregateContext = AggregateContext & {
+  fieldLengthMatrix: FieldLengthArray
+  fieldCount: number
+}
+
+function sharedGetFieldLength(this: ResidentAggregateContext, docId: number, fieldId: number): number {
+  return this.fieldLengthMatrix[docId * this.fieldCount + fieldId] ?? 0
+}
+
 let blackhole = 0
 
 function nowMs(): number {
@@ -137,11 +147,13 @@ const INDEX_OPTIONS = {
 function createEngineIndex(documents: readonly ResidentDocument[]): EngineIndex {
   const params = buildFrozenParamsFromDocuments(documents, INDEX_OPTIONS)
   const fieldTermFlyweight = createFrozenFieldTermFlyweight(params.postings)
-  const aggregateContext: AggregateContext = {
+  const aggregateContext: ResidentAggregateContext = {
     documentCount: params.documentCount,
     avgFieldLength: params.avgFieldLength,
     fieldIds: params.fieldIds,
-    getFieldLength: (docId, fieldId) => params.fieldLengthMatrix[docId * params.fieldCount + fieldId] ?? 0,
+    fieldLengthMatrix: params.fieldLengthMatrix,
+    fieldCount: params.fieldCount,
+    getFieldLength: sharedGetFieldLength,
     getExternalId: docId => params.externalIds[docId],
     resolveTermByIndex: termIndex => params.index.termByIndex(termIndex),
     getStoredFields: () => undefined,
