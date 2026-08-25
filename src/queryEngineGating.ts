@@ -19,17 +19,7 @@ import type { QueryEngineParams } from './queryEngine'
 const BROAD_EXCLUSION_TWO_PHASE_MIN_FRACTION = 0.5
 
 function gateFromResult(result: RawResult): DocIdGate {
-  return {
-    get size() {
-      return result.size
-    },
-    has(docId) {
-      return result.has(docId)
-    },
-    [Symbol.iterator]() {
-      return result.keys()
-    },
-  }
+  return new Set(result.keys())
 }
 
 function intersectDocIdsInPlace(docIds: Set<number>, branchDocIds: DocIdGate): void {
