@@ -25,3 +25,12 @@ jobs:
           bun-version: canary
       - run: pnpm install --frozen-lockfile
       - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
+      - name: Issue 4 JSC tier controls
+        shell: bash
+        run: |
+          echo '=== resident-pressure: Bun with FTL disabled ==='
+          BUN_JSC_useFTLJIT=false /usr/bin/time -v bun benchmarks/tmp/engines/resident-pressure.js
+          echo '=== resident-pressure: Bun with DFG disabled ==='
+          BUN_JSC_useDFGJIT=false /usr/bin/time -v bun benchmarks/tmp/engines/resident-pressure.js
+          echo '=== resident-pressure: Bun with all JIT disabled ==='
+          BUN_JSC_useJIT=false /usr/bin/time -v bun benchmarks/tmp/engines/resident-pressure.js
