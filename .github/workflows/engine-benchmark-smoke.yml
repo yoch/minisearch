@@ -22,6 +22,6 @@ jobs:
           cache: 'pnpm'
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: canary
       - run: pnpm install --frozen-lockfile
       - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
