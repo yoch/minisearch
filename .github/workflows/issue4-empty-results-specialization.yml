@@ -1,0 +1,96 @@
+name: Issue 4 empty-results specialization
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/engines/**'
+      - 'src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/scripts/issue4-specialize-empty-results.py'
+      - '.github/workflows/issue4-empty-results-specialization.yml'
+
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26.7.0'
+          cache: 'pnpm'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply and validate specialization
+        shell: bash
+        run: |
+          python .github/scripts/issue4-specialize-empty-results.py
+          git diff --check
+          git diff -- src/scoring.ts
+          pnpm typecheck
+          pnpm test
+
+      - name: Normal engine benchmark
+        run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
+
+      - name: Compact JSC diagnostic
+        shell: bash
+        run: |
+          echo "Bun revision: $(bun --revision)"
+
+          metric_from_report() {
+            file="$1"
+            metric="$2"
+            node -e '
+              const fs = require("fs")
+              const prefix = "@@FROZEN_ENGINE_BENCH@@"
+              const line = fs.readFileSync(process.argv[1], "utf8").split(/\r?\n/).find(x => x.startsWith(prefix))
+              if (!line) process.exit(2)
+              const report = JSON.parse(line.slice(prefix.length))
+              console.log(report.timings[process.argv[2]].medianUs)
+            ' "$file" "$metric"
+          }
+
+          run_case() {
+            label="$1"
+            file="$2"
+            metric="$3"
+            threshold="$4"
+
+            if [ -n "$threshold" ]; then
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              BUN_JSC_osrExitCountForReoptimization="$threshold" \
+              bun "$file" >"${label}.out" 2>"${label}.jit"
+            else
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              bun "$file" >"${label}.out" 2>"${label}.jit"
+            fi
+
+            median=$(metric_from_report "${label}.out" "$metric")
+            generic_dfg=$(grep -c 'Optimized scorePostingDoc#' "${label}.jit" || true)
+            new_dfg=$(grep -c 'Optimized scorePostingDocNew#' "${label}.jit" || true)
+            generic_exits=$(grep -c 'Speculation failure in scorePostingDoc#.*InadequateCoverage' "${label}.jit" || true)
+            new_exits=$(grep -c 'Speculation failure in scorePostingDocNew#.*InadequateCoverage' "${label}.jit" || true)
+            generic_max=$(grep 'Speculation failure in scorePostingDoc#.*InadequateCoverage' "${label}.jit" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
+
+            echo "RESULT ${label} median_us=${median} generic_dfg=${generic_dfg} generic_inadequate=${generic_exits} generic_max=${generic_max:-0} new_dfg=${new_dfg} new_inadequate=${new_exits}"
+          }
+
+          run_case multi-default benchmarks/tmp/engines/issue4-multi-only.js i4-multi-only ''
+          run_case multi-reopt1 benchmarks/tmp/engines/issue4-multi-only.js i4-multi-only 1
+          run_case resident-default benchmarks/tmp/engines/resident-pressure.js resident-multi ''
+          run_case resident-reopt1 benchmarks/tmp/engines/resident-pressure.js resident-multi 1
