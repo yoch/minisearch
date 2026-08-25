@@ -18,7 +18,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '22.x'
+          node-version: '26.7.0'
           cache: 'pnpm'
       - uses: oven-sh/setup-bun@v2
         with:
