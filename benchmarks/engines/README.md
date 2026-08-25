@@ -8,15 +8,7 @@ The goal is to compare JavaScript engines rather than runtimes. The generated be
 
 ### `core`
 
-A deterministic 4,096-document corpus exercises:
-
-- frozen index build
-- exact search
-- prefix search
-- fuzzy search
-- multi-term `AND`
-- ranking/materialization
-- mixed prefix + fuzzy `AND`
+A deterministic 4,096-document corpus exercises frozen index build, exact search, prefix search, fuzzy search, multi-term `AND`, ranking/materialization and mixed prefix + fuzzy `AND`.
 
 ### `bdpm-shaped`
 
@@ -26,9 +18,7 @@ A deterministic consumer-shaped workload derived from `yoch/fr.gouv.medicaments.
 
 A high-residency workload keeps 11 synthetic corpus/index families, key maps and non-indexed payload data resident at consumer-like row counts while searching the three user-facing families. It is designed to expose working-set, GC and allocator behavior; it is not a copy of the government corpus.
 
-Each profile runs in a **fresh engine process**, so allocator/GC state from one profile cannot contaminate another.
-
-Search workloads are warmed up and batch-calibrated. Result fingerprints and corpus/term counts are compared across engines so a faster but semantically divergent engine is not silently accepted.
+Each profile runs in a **fresh engine process**, so allocator/GC state from one profile cannot contaminate another. Search workloads are warmed up and batch-calibrated. Result fingerprints and corpus/term counts are compared across engines so a faster but semantically divergent engine is not silently accepted.
 
 ## Memory
 
@@ -36,41 +26,16 @@ When GNU `/usr/bin/time -v` is available, the runner measures **whole-process pe
 
 Treat RSS as profile/process memory, not as an engine heap-size metric: VM startup/reservations, native allocator state, typed-array backing memory and benchmark corpus residency all contribute.
 
-## Build
-
-Install the repository dev dependencies, then:
+## Build and run
 
 ```bash
 node benchmarks/engines/build.mjs
-```
-
-Generated files are written under the already-ignored `benchmarks/tmp/` tree.
-
-`build.mjs` also rejects bundles that retain obvious runtime-specific dependencies such as `node:` imports, `Buffer`, `process`, `TextEncoder`, `CompressionStream`, or `Response`.
-
-## Run
-
-```bash
 node benchmarks/engines/run.mjs
 ```
 
-The runner always uses the current Node executable as the reference and auto-discovers these optional commands when present:
+Generated files are written under the already-ignored `benchmarks/tmp/` tree. `build.mjs` rejects bundles that retain obvious runtime-specific dependencies such as `node:` imports, `Buffer`, `process`, `TextEncoder`, `CompressionStream`, or `Response`.
 
-| Engine | Default command | Override |
-| --- | --- | --- |
-| V8 via Node | current `node` | `FMS_ENGINE_NODE` |
-| JavaScriptCore via Bun | `bun` | `FMS_ENGINE_BUN` |
-| standalone V8 | `d8` | `FMS_ENGINE_D8` |
-| standalone JavaScriptCore | `jsc` | `FMS_ENGINE_JSC` |
-| QuickJS | `qjs` | `FMS_ENGINE_QJS` |
-
-SpiderMonkey is intentionally not auto-discovered because the common `js` command is also used by unrelated runtimes on some systems. Set it explicitly:
-
-```bash
-FMS_ENGINE_SM=/path/to/js node benchmarks/engines/run.mjs
-```
-
-Missing optional engines are skipped. A present engine that fails to execute the bundle is reported without hiding successful engines. Cross-engine result fingerprint mismatches make the runner exit with status 2.
+The runner always uses the current Node executable as the reference and auto-discovers optional Bun/JSC, d8, jsc and qjs commands. SpiderMonkey is opt-in through `FMS_ENGINE_SM` because the common `js` executable is ambiguous on many systems.
 
 ## Interpreting results
 
@@ -78,6 +43,6 @@ The timing tables print median time and throughput relative to Node (`>1x` is fa
 
 Treat the numbers as a comparison of the **JS engine on these FrozenMiniSearch workloads**, not as a general Node-vs-Bun runtime benchmark: file I/O, HTTP, package loading, compression, startup, CSV/XML parsing, PM2 and long-lived server behavior are outside the measured region.
 
-The CI smoke currently pins **Node 26.7.0** and **Bun 1.4.0**. On the resident-pressure profile this pairing has reproduced the consumer-observed direction: Bun can remain faster on simple searches while using substantially more RSS and losing the multi-term workload to Node.
+The CI smoke currently pins **Node 26.7.0** and **Bun 1.4.0**. Repeated hosted-runner runs show the same qualitative resident-pressure behavior: Bun remains faster on the simple resident searches, but the multi-term resident workload reverses in favor of Node; Bun's resident-pressure peak RSS is also higher than Node's, with the magnitude varying substantially between runners.
 
 For stable comparisons, pin CPU frequency/governor where possible, avoid mixed system load, and compare multiple complete runs. Hosted-runner absolute timings and RSS vary, so ratios within one run and repeated qualitative direction are more informative than cross-run absolutes.
