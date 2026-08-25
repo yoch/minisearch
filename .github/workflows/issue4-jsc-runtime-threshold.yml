@@ -1,0 +1,72 @@
+name: Issue 4 JSC runtime threshold control
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/engines/**'
+      - 'src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/issue4-jsc-runtime-threshold.yml'
+
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26.7.0'
+          cache: 'pnpm'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate benchmark bundles
+        shell: bash
+        run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs >/dev/null
+
+      - name: Compare plain Bun default vs reopt=1
+        shell: bash
+        run: |
+          echo "Bun revision: $(bun --revision)"
+
+          metric_from_report() {
+            file="$1"
+            metric="$2"
+            node -e '
+              const fs = require("fs")
+              const prefix = "@@FROZEN_ENGINE_BENCH@@"
+              const line = fs.readFileSync(process.argv[1], "utf8").split(/\r?\n/).find(x => x.startsWith(prefix))
+              if (!line) process.exit(2)
+              const report = JSON.parse(line.slice(prefix.length))
+              console.log(report.timings[process.argv[2]].medianUs)
+            ' "$file" "$metric"
+          }
+
+          series() {
+            label="$1"
+            file="$2"
+            metric="$3"
+            threshold="$4"
+            : >"${label}.values"
+
+            for i in 1 2 3; do
+              if [ -n "$threshold" ]; then
+                BUN_JSC_osrExitCountForReoptimization="$threshold" bun "$file" >"${label}-${i}.out"
+              else
+                bun "$file" >"${label}-${i}.out"
+              fi
+              metric_from_report "${label}-${i}.out" "$metric" >>"${label}.values"
+            done
+
+            median=$(sort -n "${label}.values" | sed -n '2p')
+            echo "RESULT ${label} median_us=${median} samples=$(tr '\n' ',' <"${label}.values" | sed 's/,$//')"
+          }
+
+          series multi-default benchmarks/tmp/engines/issue4-multi-only.js i4-multi-only ''
+          series multi-reopt1 benchmarks/tmp/engines/issue4-multi-only.js i4-multi-only 1
+          series resident-default benchmarks/tmp/engines/resident-pressure.js resident-multi ''
+          series resident-reopt1 benchmarks/tmp/engines/resident-pressure.js resident-multi 1
