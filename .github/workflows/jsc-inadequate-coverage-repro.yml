@@ -15,7 +15,7 @@ jobs:
         with:
           bun-version: canary
 
-      - name: Run compact JSC reproducer
+      - name: Run compact JSC reproducer through Bun
         shell: bash
         run: |
           echo "Bun version: $(bun --version)"
@@ -79,3 +79,80 @@ jobs:
           run_case diagnostic-default ''
           run_case diagnostic-reopt1 1
           run_case diagnostic-reopt1000 1000
+
+  direct-jsc:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download exact JSC build embedded by the tested Bun canary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          url='https://github.com/oven-sh/WebKit/releases/download/autobuild-cb61607f1a4bae79d7701965062634dee9efb349/bun-webkit-linux-amd64.tar.gz'
+          curl -L --fail --retry 4 --retry-all-errors "$url" -o /tmp/bun-webkit.tar.gz
+          echo '637271c46b1a8a0736acb8748bbe9c16528d3399e064fcdffbb293630ca63de3  /tmp/bun-webkit.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/bun-webkit.tar.gz
+          test -x bun-webkit/bin/jsc
+          bun-webkit/bin/jsc --options | grep -E '^(osrExitCountForReoptimization|osrExitCountForReoptimizationFromLoop|useFTLJIT|useConcurrentJIT)=' || true
+
+      - name: Reproduce directly in jsc
+        shell: bash
+        run: |
+          set -euo pipefail
+          JSC="$PWD/bun-webkit/bin/jsc"
+          SCRIPT="$PWD/benchmarks/jsc/inadequate-coverage-repro.js"
+
+          run_plain_series() {
+            label="$1"
+            threshold="$2"
+            : >"${label}.times"
+            for i in 1 2 3 4 5 6 7; do
+              if [ -n "$threshold" ]; then
+                "$JSC" --osrExitCountForReoptimization="$threshold" "$SCRIPT" >"${label}-${i}.all" 2>&1
+              else
+                "$JSC" "$SCRIPT" >"${label}-${i}.all" 2>&1
+              fi
+              sed -n 's/^REPRO elapsed_ms=\([0-9.]*\).*/\1/p' "${label}-${i}.all" >>"${label}.times"
+            done
+            median=$(sort -n "${label}.times" | sed -n '4p')
+            echo "JSC-PLAIN ${label} median_elapsed_ms=${median} samples=$(tr '\n' ',' <"${label}.times" | sed 's/,$//')"
+          }
+
+          run_case() {
+            label="$1"
+            threshold="$2"
+            args=(
+              --useFTLJIT=false
+              --useConcurrentJIT=false
+              --reportDFGCompileTimes=true
+              --logCompilationChanges=true
+              --printEachOSRExit=true
+              --verboseDFGOSRExit=true
+            )
+            if [ -n "$threshold" ]; then
+              args+=(--osrExitCountForReoptimization="$threshold")
+            fi
+            "$JSC" "${args[@]}" "$SCRIPT" >"${label}.all" 2>&1
+
+            repro=$(grep '^REPRO ' "${label}.all" | tail -1 || true)
+            exits=$(grep -c 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" || true)
+            max=$(grep 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
+            dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.all" || true)
+            echo "JSC-RESULT ${label} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} dfg_compiles=${dfg}"
+          }
+
+          run_plain_series plain ''
+          run_plain_series plain-reopt1 1
+          run_case diagnostic-default ''
+          run_case diagnostic-reopt1 1
+          run_case diagnostic-reopt1000 1000
+
+      - name: Upload direct-jsc logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-jsc-cb61607
+          path: |
+            *.all
+            *.times

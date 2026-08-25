@@ -1,5 +1,10 @@
-const INSERTS = Number(process.env.REPRO_INSERTS || 20000)
-const UPDATES = Number(process.env.REPRO_UPDATES || 200000)
+const env = typeof process !== 'undefined' && process.env ? process.env : {}
+const INSERTS = Number(env.REPRO_INSERTS || 20000)
+const UPDATES = Number(env.REPRO_UPDATES || 200000)
+const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+  ? () => performance.now()
+  : () => Date.now()
+const emit = typeof print === 'function' ? print : (...args) => console.log(...args)
 
 let sink = 0
 
@@ -19,17 +24,15 @@ function scorePostingDoc(results, docId, termFreq) {
 
 const results = new Map()
 
-// Phase 1: train/tier-up scorePostingDoc while the existing-result branch is never taken.
-for (let i = 0; i < INSERTS; i++) {
+for (let i = 0; i < INSERTS; i++)
   scorePostingDoc(results, i, 1 + (i & 3))
-}
 
-// Phase 2: immediately flip to the previously uncovered branch.
-const start = performance.now()
-for (let i = 0; i < UPDATES; i++) {
+const start = now()
+for (let i = 0; i < UPDATES; i++)
   scorePostingDoc(results, i % INSERTS, 1 + (i & 3))
-}
-const elapsedMs = performance.now() - start
+const elapsedMs = now() - start
 
-if (results.size !== INSERTS) throw new Error(`unexpected result size: ${results.size}`)
-console.log(`REPRO elapsed_ms=${elapsedMs.toFixed(6)} sink=${sink} size=${results.size}`)
+if (results.size !== INSERTS)
+  throw new Error(`unexpected result size: ${results.size}`)
+
+emit(`REPRO elapsed_ms=${elapsedMs.toFixed(3)} inserts=${INSERTS} updates=${UPDATES} sink=${sink}`)
