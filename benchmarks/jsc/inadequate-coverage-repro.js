@@ -24,13 +24,38 @@ function scorePostingDoc(results, docId, termFreq) {
 
 const results = new Map()
 
-for (let i = 0; i < INSERTS; i++)
-  scorePostingDoc(results, i, 1 + (i & 3))
+// The standalone jsc shell can optimize the top-level driver loops themselves.
+// That adds an unrelated loop-OSR reoptimization signal and masks the generic
+// InadequateCoverage threshold used by scorePostingDoc. JSC's test shell exposes
+// noDFG(), so keep only the driver in Baseline/LLInt there. Bun does not expose
+// noDFG(), and therefore continues to execute the original top-level-loop shape.
+function insertPhase() {
+  for (let i = 0; i < INSERTS; i++)
+    scorePostingDoc(results, i, 1 + (i & 3))
+}
 
-const start = now()
-for (let i = 0; i < UPDATES; i++)
-  scorePostingDoc(results, i % INSERTS, 1 + (i & 3))
-const elapsedMs = now() - start
+function updatePhase() {
+  for (let i = 0; i < UPDATES; i++)
+    scorePostingDoc(results, i % INSERTS, 1 + (i & 3))
+}
+
+let elapsedMs
+if (typeof noDFG === 'function') {
+  noDFG(insertPhase)
+  noDFG(updatePhase)
+  insertPhase()
+  const start = now()
+  updatePhase()
+  elapsedMs = now() - start
+} else {
+  for (let i = 0; i < INSERTS; i++)
+    scorePostingDoc(results, i, 1 + (i & 3))
+
+  const start = now()
+  for (let i = 0; i < UPDATES; i++)
+    scorePostingDoc(results, i % INSERTS, 1 + (i & 3))
+  elapsedMs = now() - start
+}
 
 if (results.size !== INSERTS)
   throw new Error(`unexpected result size: ${results.size}`)
