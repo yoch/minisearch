@@ -18,8 +18,7 @@ const SEARCH_TARGET_MS = 50
 const SEARCH_MAX_BATCH = 1 << 11
 
 // Deliberately copied from residentEngineBenchEntry.ts. The only material experiment
-// is removing all pre-training workloads: this fresh process measures the multi-term
-// workload alone, while keeping the exact production benchmark search call shape.
+// is removing all pre-training workloads while keeping the original search call shape.
 const INDEX_SPECS = [
   { name: 'specialites', count: 15_848, textWords: 6, payloadWords: 8 },
   { name: 'presentations', count: 20_905, textWords: 24, payloadWords: 18 },
