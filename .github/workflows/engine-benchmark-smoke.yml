@@ -9,6 +9,7 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/engine-benchmark-smoke.yml'
+      - '.github/scripts/issue4-isolate-accumulator.py'
 
 jobs:
   smoke:
@@ -24,45 +25,75 @@ jobs:
         with:
           bun-version: canary
       - run: pnpm install --frozen-lockfile
-      - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
-      - name: Issue 4 targeted JSC and V8 traces
+
+      - name: Apply and validate accumulator isolation
         shell: bash
         run: |
-          trace_jsc() {
-            label="$1"
-            file="$2"
-            echo "=== JSC ${label} ==="
-            BUN_JSC_useFTLJIT=false \
-            BUN_JSC_useConcurrentJIT=false \
-            BUN_JSC_reportDFGCompileTimes=true \
-            BUN_JSC_logCompilationChanges=true \
-            bun "$file" >"${label}.jsc.out" 2>"${label}.jsc.jit"
-            cat "${label}.jsc.out"
-            echo "--- targeted JSC hot paths (${label}) ---"
-            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|jettison|reopt|deopt|OSR' "${label}.jsc.jit" || true
+          python .github/scripts/issue4-isolate-accumulator.py
+          git diff --check
+          git diff -- src/scoring.ts
+          pnpm typecheck
+          pnpm test
+
+      - name: Engine benchmark
+        run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
+
+      - name: Compact JSC accumulator diagnostic
+        shell: bash
+        run: |
+          echo "Bun version: $(bun --version)"
+          echo "Bun revision: $(bun --revision 2>/dev/null || echo unknown)"
+
+          metric_from_report() {
+            file="$1"
+            metric="$2"
+            node -e '
+              const fs = require("fs")
+              const prefix = "@@FROZEN_ENGINE_BENCH@@"
+              const line = fs.readFileSync(process.argv[1], "utf8").split(/\r?\n/).find(x => x.startsWith(prefix))
+              if (!line) process.exit(2)
+              const report = JSON.parse(line.slice(prefix.length))
+              console.log(report.timings[process.argv[2]].medianUs)
+            ' "$file" "$metric"
           }
 
-          trace_v8() {
+          run_case() {
             label="$1"
             file="$2"
-            echo "=== V8 ${label} ==="
-            node --trace-opt --trace-deopt "$file" >"${label}.v8.log" 2>&1
-            grep '@@FROZEN_ENGINE_BENCH@@' "${label}.v8.log" || true
-            echo "--- targeted V8 hot paths (${label}) ---"
-            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|optimizing|completed optimizing|deopt' "${label}.v8.log" || true
+            metric="$3"
+            threshold="$4"
+
+            if [ -n "$threshold" ]; then
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              BUN_JSC_osrExitCountForReoptimization="$threshold" \
+              bun "$file" >"${label}.out" 2>"${label}.jit"
+            else
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              bun "$file" >"${label}.out" 2>"${label}.jit"
+            fi
+
+            median=$(metric_from_report "${label}.out" "$metric")
+            score_dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.jit" || true)
+            accum_dfg=$(grep -c 'Optimized accumulateScoredResult' "${label}.jit" || true)
+            score_exit=$(grep -c 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.jit" || true)
+            accum_exit=$(grep -c 'Speculation failure in accumulateScoredResult.*InadequateCoverage' "${label}.jit" || true)
+            score_max=$(grep 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.jit" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
+            accum_max=$(grep 'Speculation failure in accumulateScoredResult.*InadequateCoverage' "${label}.jit" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
+
+            echo "RESULT ${label} median_us=${median} score_dfg=${score_dfg} score_inadequate=${score_exit} score_max=${score_max:-0} accum_dfg=${accum_dfg} accum_inadequate=${accum_exit} accum_max=${accum_max:-0}"
           }
 
-          trace_jsc resident-history benchmarks/tmp/engines/resident-pressure.js
-          trace_jsc multi-only benchmarks/tmp/engines/issue4-multi-only.js
-          trace_v8 resident-history benchmarks/tmp/engines/resident-pressure.js
-          trace_v8 multi-only benchmarks/tmp/engines/issue4-multi-only.js
-
-          echo '=== V8 aggregateSegmentPostingList bytecode ==='
-          node --print-bytecode --print-bytecode-filter=aggregateSegmentPostingList \
-            benchmarks/tmp/engines/issue4-multi-only.js >aggregate.bytecode.log 2>&1
-          grep -E -B 7 -A 7 '@[[:space:]]+(19|306|356)[[:space:]]' aggregate.bytecode.log || true
-
-          echo '=== V8 scorePostingDoc bytecode ==='
-          node --print-bytecode --print-bytecode-filter=scorePostingDoc \
-            benchmarks/tmp/engines/issue4-multi-only.js >score.bytecode.log 2>&1
-          grep -E -B 7 -A 7 '@[[:space:]]+(19|42|61|162|313)[[:space:]]' score.bytecode.log || true
+          run_case resident-default benchmarks/tmp/engines/resident-pressure.js resident-multi ''
+          run_case resident-reopt1 benchmarks/tmp/engines/resident-pressure.js resident-multi 1
+          run_case multi-default benchmarks/tmp/engines/issue4-multi-only.js i4-multi-only ''
+          run_case multi-reopt1 benchmarks/tmp/engines/issue4-multi-only.js i4-multi-only 1
