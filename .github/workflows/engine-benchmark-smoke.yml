@@ -1,0 +1,27 @@
+name: Engine benchmark smoke
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/engines/**'
+      - 'src/**'
+      - 'tsconfig.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/engine-benchmark-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26.7.0'
+          cache: 'pnpm'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+      - run: pnpm install --frozen-lockfile
+      - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
