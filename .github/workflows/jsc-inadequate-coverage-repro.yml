@@ -21,6 +21,25 @@ jobs:
           echo "Bun version: $(bun --version)"
           echo "Bun revision: $(bun --revision 2>/dev/null || echo unknown)"
 
+          run_plain_series() {
+            label="$1"
+            threshold="$2"
+            : >"${label}.times"
+
+            for i in 1 2 3 4 5; do
+              if [ -n "$threshold" ]; then
+                BUN_JSC_osrExitCountForReoptimization="$threshold" \
+                  bun benchmarks/jsc/inadequate-coverage-repro.js >"${label}-${i}.out"
+              else
+                bun benchmarks/jsc/inadequate-coverage-repro.js >"${label}-${i}.out"
+              fi
+              sed -n 's/^REPRO elapsed_ms=\([0-9.]*\).*/\1/p' "${label}-${i}.out" >>"${label}.times"
+            done
+
+            median=$(sort -n "${label}.times" | sed -n '3p')
+            echo "PLAIN ${label} median_elapsed_ms=${median} samples=$(tr '\n' ',' <"${label}.times" | sed 's/,$//')"
+          }
+
           run_case() {
             label="$1"
             threshold="$2"
@@ -54,6 +73,9 @@ jobs:
             [ -n "$bytecode" ] && echo "BYTECODE ${label} ${bytecode}"
           }
 
-          run_case default ''
-          run_case reopt1 1
-          run_case reopt1000 1000
+          run_plain_series plain ''
+          run_plain_series plain-reopt1 1
+
+          run_case diagnostic-default ''
+          run_case diagnostic-reopt1 1
+          run_case diagnostic-reopt1000 1000
