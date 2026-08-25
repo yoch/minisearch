@@ -7,11 +7,17 @@ import { rollup } from 'rollup'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '../..')
-const inputs = [
-  resolve(here, 'engineBenchEntry.ts'),
-  resolve(here, 'bdpmEngineBenchEntry.ts'),
+const outputDir = resolve(root, 'benchmarks/tmp/engines')
+const profiles = [
+  { name: 'core', input: resolve(here, 'engineBenchEntry.ts') },
+  { name: 'bdpm-shaped', input: resolve(here, 'bdpmEngineBenchEntry.ts') },
+  { name: 'resident-pressure', input: resolve(here, 'residentEngineBenchEntry.ts') },
 ]
-export const outputFile = resolve(root, 'benchmarks/tmp/engines/frozen-engine-bench.js')
+export const outputFiles = profiles.map(profile => ({
+  name: profile.name,
+  file: resolve(outputDir, `${profile.name}.js`),
+}))
+export const outputFile = resolve(outputDir, 'frozen-engine-bench.js')
 
 const forbiddenRuntimeTokens = [
   ['Node built-in import', /['"]node:/],
@@ -77,28 +83,40 @@ async function buildPart (input) {
   }
 }
 
-export async function buildEngineBundle () {
-  await mkdir(dirname(outputFile), { recursive: true })
-  const parts = []
-  for (const input of inputs) parts.push(await buildPart(input))
-  await writeFile(outputFile, `${parts.join('\n;\n')}\n`, 'utf8')
-
-  const source = await readFile(outputFile, 'utf8')
-  for (const [label, pattern] of forbiddenRuntimeTokens) {
+function assertPureBundle (source, expectedMarkers, label) {
+  for (const [tokenLabel, pattern] of forbiddenRuntimeTokens) {
     if (pattern.test(source)) {
-      throw new Error(`engine bundle purity check failed: ${label}`)
+      throw new Error(`engine bundle purity check failed (${label}): ${tokenLabel}`)
     }
   }
   const reportMarkers = source.match(/@@FROZEN_ENGINE_BENCH@@/g)?.length ?? 0
-  if (reportMarkers < inputs.length) {
-    throw new Error(`engine bundle purity check failed: expected ${inputs.length} report markers, got ${reportMarkers}`)
+  if (reportMarkers !== expectedMarkers) {
+    throw new Error(`engine bundle purity check failed (${label}): expected ${expectedMarkers} report markers, got ${reportMarkers}`)
   }
-  return outputFile
+}
+
+export async function buildEngineBundle () {
+  await mkdir(outputDir, { recursive: true })
+  const parts = []
+  for (let i = 0; i < profiles.length; i++) {
+    const source = await buildPart(profiles[i].input)
+    parts.push(source)
+    assertPureBundle(source, 1, profiles[i].name)
+    await writeFile(outputFiles[i].file, `${source}\n`, 'utf8')
+  }
+
+  await writeFile(outputFile, `${parts.join('\n;\n')}\n`, 'utf8')
+  const combined = await readFile(outputFile, 'utf8')
+  assertPureBundle(combined, profiles.length, 'combined')
+  return { outputFile, outputFiles }
 }
 
 if (process.argv[1] != null && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   buildEngineBundle()
-    .then(file => console.log(`engine benchmark bundle: ${file}`))
+    .then(({ outputFile: file, outputFiles: files }) => {
+      console.log(`engine benchmark bundle: ${file}`)
+      for (const profile of files) console.log(`engine profile bundle (${profile.name}): ${profile.file}`)
+    })
     .catch(error => {
       console.error(error)
       process.exitCode = 1
