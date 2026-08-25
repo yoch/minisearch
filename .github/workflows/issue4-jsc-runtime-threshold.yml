@@ -34,8 +34,8 @@ jobs:
           echo "Bun revision: $(bun --revision)"
 
           metric_from_report() {
-            file="$1"
-            metric="$2"
+            local report_file="$1"
+            local metric="$2"
             node -e '
               const fs = require("fs")
               const prefix = "@@FROZEN_ENGINE_BENCH@@"
@@ -43,25 +43,26 @@ jobs:
               if (!line) process.exit(2)
               const report = JSON.parse(line.slice(prefix.length))
               console.log(report.timings[process.argv[2]].medianUs)
-            ' "$file" "$metric"
+            ' "$report_file" "$metric"
           }
 
           series() {
-            label="$1"
-            file="$2"
-            metric="$3"
-            threshold="$4"
+            local label="$1"
+            local bench_file="$2"
+            local metric="$3"
+            local threshold="$4"
             : >"${label}.values"
 
             for i in 1 2 3; do
               if [ -n "$threshold" ]; then
-                BUN_JSC_osrExitCountForReoptimization="$threshold" bun "$file" >"${label}-${i}.out"
+                BUN_JSC_osrExitCountForReoptimization="$threshold" bun "$bench_file" >"${label}-${i}.out"
               else
-                bun "$file" >"${label}-${i}.out"
+                bun "$bench_file" >"${label}-${i}.out"
               fi
               metric_from_report "${label}-${i}.out" "$metric" >>"${label}.values"
             done
 
+            local median
             median=$(sort -n "${label}.values" | sed -n '2p')
             echo "RESULT ${label} median_us=${median} samples=$(tr '\n' ',' <"${label}.values" | sed 's/,$//')"
           }
