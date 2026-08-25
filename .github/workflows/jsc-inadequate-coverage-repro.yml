@@ -122,6 +122,7 @@ jobs:
           run_case() {
             label="$1"
             threshold="$2"
+            mode="$3"
             args=(
               --useFTLJIT=false
               --useConcurrentJIT=false
@@ -133,20 +134,27 @@ jobs:
             if [ -n "$threshold" ]; then
               args+=(--osrExitCountForReoptimization="$threshold")
             fi
-            "$JSC" "${args[@]}" "$SCRIPT" >"${label}.all" 2>&1
+            if [ "$mode" = module ]; then
+              "$JSC" "${args[@]}" --module-file="$SCRIPT" >"${label}.all" 2>&1
+            else
+              "$JSC" "${args[@]}" "$SCRIPT" >"${label}.all" 2>&1
+            fi
 
             repro=$(grep '^REPRO ' "${label}.all" | tail -1 || true)
             exits=$(grep -c 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" || true)
             max=$(grep 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
             dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.all" || true)
-            echo "JSC-RESULT ${label} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} dfg_compiles=${dfg}"
+            echo "JSC-RESULT ${label} mode=${mode} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} dfg_compiles=${dfg}"
           }
 
           run_plain_series plain ''
           run_plain_series plain-reopt1 1
-          run_case diagnostic-default ''
-          run_case diagnostic-reopt1 1
-          run_case diagnostic-reopt1000 1000
+          run_case diagnostic-default '' script
+          run_case diagnostic-reopt1 1 script
+          run_case diagnostic-reopt1000 1000 script
+          run_case diagnostic-module-default '' module
+          run_case diagnostic-module-reopt1 1 module
+          run_case diagnostic-module-reopt1000 1000 module
 
       - name: Upload direct-jsc logs
         if: always()
