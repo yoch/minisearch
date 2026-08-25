@@ -36,10 +36,11 @@ export async function buildEngineBundle () {
     plugins: [
       typescript({
         tsconfig: resolve(root, 'tsconfig.json'),
+        filterRoot: root,
         include: [
-          resolve(root, 'src/**/*.ts'),
-          resolve(root, 'src/**/*.js'),
-          resolve(here, '**/*.ts'),
+          'src/**/*.ts',
+          'src/**/*.js',
+          'benchmarks/engines/**/*.ts',
         ],
         compilerOptions: {
           sourceMap: false,
