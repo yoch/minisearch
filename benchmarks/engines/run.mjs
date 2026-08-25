@@ -2,7 +2,7 @@ import { access } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { basename } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { buildEngineBundle, outputFile } from './build.mjs'
+import { buildEngineBundle, outputFiles } from './build.mjs'
 
 const REPORT_PREFIX = '@@FROZEN_ENGINE_BENCH@@'
 const MAX_OUTPUT = 8 * 1024 * 1024
@@ -38,23 +38,67 @@ function versionFor (command) {
   return probe.status === 0 && text ? text : 'unknown'
 }
 
-function parseReport (stdout) {
+function parseMaxRssKiB (stderr) {
+  const match = stderr.match(/Maximum resident set size \(kbytes\):\s*(\d+)/)
+  return match == null ? null : Number(match[1])
+}
+
+function detectGnuTime () {
+  const command = process.env.FMS_GNU_TIME || '/usr/bin/time'
+  const probe = spawnSync(command, ['-v', 'true'], {
+    encoding: 'utf8',
+    maxBuffer: 256 * 1024,
+    timeout: 5000,
+  })
+  if (probe.error != null || probe.status !== 0) return null
+  return parseMaxRssKiB(probe.stderr || '') == null ? null : command
+}
+
+function parseProfileReport (stdout, expectedProfile) {
   const lines = stdout
     .split(/\r?\n/)
     .filter(candidate => candidate.startsWith(REPORT_PREFIX))
-  if (lines.length === 0) throw new Error('benchmark report marker not found')
+  if (lines.length !== 1) {
+    throw new Error(`expected one benchmark report for ${expectedProfile}, got ${lines.length}`)
+  }
+  const report = JSON.parse(lines[0].slice(REPORT_PREFIX.length))
+  if (report.schema !== 1 || report.timings == null || report.fingerprints == null) {
+    throw new Error(`benchmark report schema mismatch for ${expectedProfile}`)
+  }
+  const profile = report.profile || 'core'
+  if (profile !== expectedProfile) {
+    throw new Error(`benchmark profile mismatch: expected ${expectedProfile}, got ${profile}`)
+  }
+  return report
+}
 
-  const reports = lines.map(line => JSON.parse(line.slice(REPORT_PREFIX.length)))
+function runProfile (command, profile, gnuTime) {
+  const executable = gnuTime || command
+  const args = gnuTime ? ['-v', command, profile.file] : [profile.file]
+  const child = spawnSync(executable, args, {
+    encoding: 'utf8',
+    maxBuffer: MAX_OUTPUT,
+    timeout: 120000,
+  })
+  if (child.error != null) throw child.error
+  if (child.status !== 0) {
+    const details = `${child.stderr || ''}${child.stdout || ''}`.trim()
+    throw new Error(`${profile.name}: exit ${child.status}${details ? `: ${details.slice(0, 1000)}` : ''}`)
+  }
+  return {
+    report: parseProfileReport(child.stdout, profile.name),
+    maxRssKiB: gnuTime ? parseMaxRssKiB(child.stderr || '') : null,
+  }
+}
+
+function mergeProfileReports (profileRuns) {
   const timings = {}
   const fingerprints = {}
   const profiles = []
   let documents = 0
   let terms = 0
 
-  for (const report of reports) {
-    if (report.schema !== 1 || report.timings == null || report.fingerprints == null) {
-      throw new Error('benchmark report schema mismatch')
-    }
+  for (const { report } of profileRuns) {
     const profile = report.profile || 'core'
     const workloads = Object.keys(report.timings)
     profiles.push({ name: profile, corpus: report.corpus, workloads })
@@ -80,22 +124,18 @@ function parseReport (stdout) {
   }
 }
 
-function runEngine (name, command) {
-  const child = spawnSync(command, [outputFile], {
-    encoding: 'utf8',
-    maxBuffer: MAX_OUTPUT,
-    timeout: 120000,
-  })
-  if (child.error != null) throw child.error
-  if (child.status !== 0) {
-    const details = `${child.stderr || ''}${child.stdout || ''}`.trim()
-    throw new Error(`exit ${child.status}${details ? `: ${details.slice(0, 1000)}` : ''}`)
+function runEngine (name, command, gnuTime) {
+  const profileRuns = outputFiles.map(profile => runProfile(command, profile, gnuTime))
+  const maxRssKiB = {}
+  for (let i = 0; i < outputFiles.length; i++) {
+    maxRssKiB[outputFiles[i].name] = profileRuns[i].maxRssKiB
   }
   return {
     name,
     command,
     version: versionFor(command),
-    report: parseReport(child.stdout),
+    report: mergeProfileReports(profileRuns),
+    maxRssKiB,
   }
 }
 
@@ -121,6 +161,10 @@ function formatUs (value) {
   return `${value.toFixed(2)} us`
 }
 
+function formatMiB (kiB) {
+  return `${(kiB / 1024).toFixed(1)} MiB`
+}
+
 function printProfileTable (runs, profile) {
   const reference = runs.find(run => run.name === 'node') || runs[0]
   const refProfile = reference.report.profiles.find(item => item.name === profile.name)
@@ -142,14 +186,45 @@ function printProfileTable (runs, profile) {
   }
 }
 
+function printMemoryTable (runs) {
+  const reference = runs.find(run => run.name === 'node') || runs[0]
+  const profiles = reference.report.profiles.map(profile => profile.name)
+  const hasMemory = runs.some(run => profiles.some(profile => run.maxRssKiB[profile] != null))
+  if (!hasMemory) return
+
+  console.log('\nOS peak RSS by isolated profile (GNU time; lower is better)')
+  const width = 25
+  console.log(['engine', ...profiles].map(value => value.padEnd(width)).join(''))
+  console.log('-'.repeat(width * (profiles.length + 1)))
+  for (const run of runs) {
+    const cells = [run.name.padEnd(width)]
+    for (const profile of profiles) {
+      const rss = run.maxRssKiB[profile]
+      const refRss = reference.maxRssKiB[profile]
+      if (rss == null || refRss == null) {
+        cells.push('n/a'.padEnd(width))
+      } else {
+        cells.push(`${formatMiB(rss)} ${(rss / refRss).toFixed(2)}x`.padEnd(width))
+      }
+    }
+    console.log(cells.join(''))
+  }
+}
+
 function printTables (runs) {
   const reference = runs.find(run => run.name === 'node') || runs[0]
   for (const profile of reference.report.profiles) printProfileTable(runs, profile)
+  printMemoryTable(runs)
 }
 
 async function main () {
   await buildEngineBundle()
-  await access(outputFile, constants.R_OK)
+  for (const profile of outputFiles) await access(profile.file, constants.R_OK)
+
+  const gnuTime = detectGnuTime()
+  if (process.env.FMS_REQUIRE_RSS === '1' && gnuTime == null) {
+    throw new Error('GNU time with -v support is required for RSS measurement but was not found')
+  }
 
   const runs = []
   const failures = []
@@ -160,7 +235,7 @@ async function main () {
       continue
     }
     try {
-      runs.push(runEngine(spec.name, command))
+      runs.push(runEngine(spec.name, command, gnuTime))
     } catch (error) {
       failures.push(`${spec.name} (${basename(command)}): ${error.message}`)
     }
@@ -172,7 +247,7 @@ async function main () {
       failures.push(`spidermonkey: executable not found (${spiderMonkey})`)
     } else {
       try {
-        runs.push(runEngine('spidermonkey', spiderMonkey))
+        runs.push(runEngine('spidermonkey', spiderMonkey, gnuTime))
       } catch (error) {
         failures.push(`spidermonkey (${basename(spiderMonkey)}): ${error.message}`)
       }
@@ -184,7 +259,13 @@ async function main () {
   printTables(runs)
 
   console.log('\nJSON:')
-  console.log(JSON.stringify({ schema: 1, runs, failures, mismatches }, null, 2))
+  console.log(JSON.stringify({
+    schema: 1,
+    rssMeasurement: gnuTime == null ? null : { tool: gnuTime, metric: 'maximum-resident-set-size-kib' },
+    runs,
+    failures,
+    mismatches,
+  }, null, 2))
 
   if (failures.length > 0) {
     console.error(`\nFailed engines:\n- ${failures.join('\n- ')}`)
