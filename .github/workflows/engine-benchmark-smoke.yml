@@ -25,62 +25,45 @@ jobs:
           bun-version: canary
       - run: pnpm install --frozen-lockfile
       - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
-      - name: Issue 4 targeted JSC and V8 traces
+
+      - name: Compact JSC OSR/reoptimization diagnostic
         shell: bash
         run: |
-          trace_jsc() {
+          run_case() {
             label="$1"
-            file="$2"
-            echo "=== JSC ${label} ==="
-            BUN_JSC_useFTLJIT=false \
-            BUN_JSC_useConcurrentJIT=false \
-            BUN_JSC_reportDFGCompileTimes=true \
-            BUN_JSC_logCompilationChanges=true \
-            BUN_JSC_printEachOSRExit=true \
-            BUN_JSC_verboseDFGOSRExit=true \
-            bun "$file" >"${label}.jsc.out" 2>"${label}.jsc.jit"
-            cat "${label}.jsc.out"
-            echo "--- targeted JSC hot paths / exits (${label}) ---"
-            grep -Ei -B 3 -A 6 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|jettison|reoptimize' "${label}.jsc.jit" || true
+            threshold="$2"
+            file="benchmarks/tmp/engines/issue4-multi-only.js"
+            echo "=== ${label} ==="
+            if [ -n "$threshold" ]; then
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              BUN_JSC_osrExitCountForReoptimizationFromLoop="$threshold" \
+              bun "$file" >"${label}.out" 2>"${label}.jit"
+            else
+              BUN_JSC_useFTLJIT=false \
+              BUN_JSC_useConcurrentJIT=false \
+              BUN_JSC_reportDFGCompileTimes=true \
+              BUN_JSC_logCompilationChanges=true \
+              BUN_JSC_printEachOSRExit=true \
+              BUN_JSC_verboseDFGOSRExit=true \
+              bun "$file" >"${label}.out" 2>"${label}.jit"
+            fi
+
+            grep '@@FROZEN_ENGINE_BENCH@@' "${label}.out" || true
+            printf 'scorePostingDoc DFG optimizations: '
+            grep -c 'Optimized scorePostingDoc' "${label}.jit" || true
+            printf 'aggregateSegmentPostingList DFG optimizations: '
+            grep -c 'Optimized aggregateSegmentPostingList' "${label}.jit" || true
+            echo '-- scorePostingDoc compilation sequence --'
+            grep -E 'compiling scorePostingDoc|Optimized scorePostingDoc' "${label}.jit" || true
+            echo '-- reoptimization/OSR-exit summary --'
+            grep -Ei 'We exited .*Reoptimizing|scorePostingDoc.*(exit|OSR)|exit.*scorePostingDoc' "${label}.jit" || true
           }
 
-          trace_jsc_reopt100() {
-            label="$1"
-            file="$2"
-            echo "=== JSC ${label}: loop-reopt threshold 100 ==="
-            BUN_JSC_useFTLJIT=false \
-            BUN_JSC_useConcurrentJIT=false \
-            BUN_JSC_reportDFGCompileTimes=true \
-            BUN_JSC_logCompilationChanges=true \
-            BUN_JSC_osrExitCountForReoptimizationFromLoop=100 \
-            bun "$file" >"${label}.jsc.out" 2>"${label}.jsc.jit"
-            cat "${label}.jsc.out"
-            echo "--- targeted JSC hot paths (${label}) ---"
-            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|jettison|reoptimize' "${label}.jsc.jit" || true
-          }
-
-          trace_v8() {
-            label="$1"
-            file="$2"
-            echo "=== V8 ${label} ==="
-            node --trace-opt --trace-deopt "$file" >"${label}.v8.log" 2>&1
-            grep '@@FROZEN_ENGINE_BENCH@@' "${label}.v8.log" || true
-            echo "--- targeted V8 hot paths (${label}) ---"
-            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|optimizing|completed optimizing|deopt' "${label}.v8.log" || true
-          }
-
-          trace_jsc resident-history benchmarks/tmp/engines/resident-pressure.js
-          trace_jsc multi-only benchmarks/tmp/engines/issue4-multi-only.js
-          trace_jsc_reopt100 multi-only-reopt100 benchmarks/tmp/engines/issue4-multi-only.js
-          trace_v8 resident-history benchmarks/tmp/engines/resident-pressure.js
-          trace_v8 multi-only benchmarks/tmp/engines/issue4-multi-only.js
-
-          echo '=== V8 aggregateSegmentPostingList bytecode ==='
-          node --print-bytecode --print-bytecode-filter=aggregateSegmentPostingList \
-            benchmarks/tmp/engines/issue4-multi-only.js >aggregate.bytecode.log 2>&1
-          grep -E -B 7 -A 7 '@[[:space:]]+(19|306|356)[[:space:]]' aggregate.bytecode.log || true
-
-          echo '=== V8 scorePostingDoc bytecode ==='
-          node --print-bytecode --print-bytecode-filter=scorePostingDoc \
-            benchmarks/tmp/engines/issue4-multi-only.js >score.bytecode.log 2>&1
-          grep -E -B 7 -A 7 '@[[:space:]]+(19|42|61|162|313)[[:space:]]' score.bytecode.log || true
+          run_case default ''
+          run_case reopt100 100
+          run_case reopt1000 1000
