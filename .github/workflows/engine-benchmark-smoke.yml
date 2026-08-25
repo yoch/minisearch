@@ -9,6 +9,7 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/engine-benchmark-smoke.yml'
+      - '.github/scripts/issue4-hoist-scoring.py'
 
 jobs:
   smoke:
@@ -24,206 +25,20 @@ jobs:
         with:
           bun-version: canary
       - run: pnpm install --frozen-lockfile
-      - name: Apply scoring-invariant hoist experiment
+
+      - name: Apply and validate scoring-invariant hoist
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('src/scoring.ts')
-          source = path.read_text()
-
-          replacements = [
-              (
-          '''function getDerivedTerm(
-            derivedTerm: AggregateDerivedTerm,
-            cache: { value?: string },
-            context: AggregateContext,
-          ): string {
-            if (typeof derivedTerm === 'string') return derivedTerm
-            if (cache.value === undefined) {
-              if (context.resolveTermByIndex == null) {
-                throw new Error('FrozenMiniSearch: missing term resolver for indexed derived term')
-              }
-              cache.value = context.resolveTermByIndex(derivedTerm)
-            }
-            return cache.value
-          }
-          ''',
-          '''function resolveDerivedTerm(
-            derivedTerm: AggregateDerivedTerm,
-            context: AggregateContext,
-          ): string {
-            if (typeof derivedTerm === 'string') return derivedTerm
-            const resolveTermByIndex = context.resolveTermByIndex
-            if (resolveTermByIndex == null) {
-              throw new Error('FrozenMiniSearch: missing term resolver for indexed derived term')
-            }
-            return resolveTermByIndex(derivedTerm)
-          }
-          '''),
-              (
-          '''function scorePostingDoc(
-            sourceTerm: string,
-            derivedTerm: AggregateDerivedTerm,
-            field: string,
-            fieldId: number,
-            docId: number,
-            termFreq: number,
-            termWeight: number,
-            termBoost: number,
-            fieldBoost: number,
-            matchingFields: number,
-            context: AggregateContext,
-            boostDocumentFn: ((id: unknown, term: string, storedFields?: Record<string, unknown>) => number) | undefined,
-            bm25: Bm25FieldConstants,
-            results: RawResult,
-            derivedTermCache: { value?: string },
-            hoistedIdf?: number,
-          ): void {
-            const resolvedDerivedTerm = getDerivedTerm(derivedTerm, derivedTermCache, context)
-            const docBoost = boostDocumentFn
-              ? boostDocumentFn(context.getExternalId(docId), resolvedDerivedTerm, context.getStoredFields(docId))
-              : 1
-            if (!docBoost) return
-
-            const fieldLength = context.getFieldLength(docId, fieldId)
-            const rawScore = hoistedIdf !== undefined
-              ? calcBm25TfWithConstants(termFreq, fieldLength, bm25, hoistedIdf)
-              : calcBM25ScoreWithConstants(
-                  termFreq, matchingFields, context.documentCount, fieldLength, bm25,
-                )
-            const weightedScore = termWeight * termBoost * fieldBoost * docBoost * rawScore
-
-            const result = results.get(docId)
-            if (result) {
-              result.score += weightedScore
-              assignUniqueTerm(result.terms, sourceTerm)
-              const match = getOwnProperty(result.match as Record<string, unknown>, resolvedDerivedTerm) as string[] | undefined
-              if (match) {
-                match.push(field)
-              } else {
-                result.match[resolvedDerivedTerm] = [field]
-              }
-            } else {
-              results.set(docId, {
-                score: weightedScore,
-                terms: [sourceTerm],
-                match: { [resolvedDerivedTerm]: [field] },
-              })
-            }
-          }
-          ''',
-          '''function scorePostingDoc(
-            sourceTerm: string,
-            resolvedDerivedTerm: string,
-            field: string,
-            fieldId: number,
-            docId: number,
-            termFreq: number,
-            scoreMultiplier: number,
-            context: AggregateContext,
-            boostDocumentFn: ((id: unknown, term: string, storedFields?: Record<string, unknown>) => number) | undefined,
-            bm25: Bm25FieldConstants,
-            hoistedIdf: number,
-            results: RawResult,
-          ): void {
-            const docBoost = boostDocumentFn
-              ? boostDocumentFn(context.getExternalId(docId), resolvedDerivedTerm, context.getStoredFields(docId))
-              : 1
-            if (!docBoost) return
-
-            const fieldLength = context.getFieldLength(docId, fieldId)
-            const rawScore = calcBm25TfWithConstants(termFreq, fieldLength, bm25, hoistedIdf)
-            const weightedScore = scoreMultiplier * docBoost * rawScore
-
-            const result = results.get(docId)
-            if (result) {
-              result.score += weightedScore
-              assignUniqueTerm(result.terms, sourceTerm)
-              const match = getOwnProperty(result.match as Record<string, unknown>, resolvedDerivedTerm) as string[] | undefined
-              if (match) {
-                match.push(field)
-              } else {
-                result.match[resolvedDerivedTerm] = [field]
-              }
-            } else {
-              results.set(docId, {
-                score: weightedScore,
-                terms: [sourceTerm],
-                match: { [resolvedDerivedTerm]: [field] },
-              })
-            }
-          }
-          '''),
-              (
-          '''  const matchingFields = list.length
-            const bm25 = bm25FieldConstants(bm25params, context.avgFieldLength[fieldId])
-            const hoistedIdf = bm25Idf(matchingFields, context.documentCount)
-            const { docIds, freqs, offset, length } = list
-            const derivedTermCache: { value?: string } = {}
-          ''',
-          '''  const matchingFields = list.length
-            const bm25 = bm25FieldConstants(bm25params, context.avgFieldLength[fieldId])
-            const hoistedIdf = bm25Idf(matchingFields, context.documentCount)
-            const scoreMultiplier = termWeight * termBoost * fieldBoost
-            const resolvedDerivedTerm = resolveDerivedTerm(derivedTerm, context)
-            const { docIds, freqs, offset, length } = list
-          '''),
-              (
-          '''      scorePostingDoc(
-                sourceTerm, derivedTerm, field, fieldId, docId, freqs[index],
-                termWeight, termBoost, fieldBoost, matchingFields,
-                context, boostDocumentFn, bm25, results, derivedTermCache,
-                hoistedIdf,
-              )
-          ''',
-          '''      scorePostingDoc(
-                sourceTerm, resolvedDerivedTerm, field, fieldId, docId, freqs[index],
-                scoreMultiplier, context, boostDocumentFn, bm25, hoistedIdf, results,
-              )
-          '''),
-              (
-          '''    scorePostingDoc(
-              sourceTerm, derivedTerm, field, fieldId, docId, termFreq,
-              termWeight, termBoost, fieldBoost, matchingFields,
-              context, boostDocumentFn, bm25, results, derivedTermCache,
-              hoistedIdf,
-            )
-          ''',
-          '''    scorePostingDoc(
-              sourceTerm, resolvedDerivedTerm, field, fieldId, docId, termFreq,
-              scoreMultiplier, context, boostDocumentFn, bm25, hoistedIdf, results,
-            )
-          '''),
-              (
-          '''    const matchingFields = postingList.size
-            const bm25 = bm25FieldConstants(bm25params, context.avgFieldLength[fieldId])
-            const hoistedIdf = bm25Idf(matchingFields, context.documentCount)
-            const derivedTermCache: { value?: string } = {}
-          ''',
-          '''    const matchingFields = postingList.size
-            const bm25 = bm25FieldConstants(bm25params, context.avgFieldLength[fieldId])
-            const hoistedIdf = bm25Idf(matchingFields, context.documentCount)
-            const scoreMultiplier = termWeight * termBoost * fieldBoost
-            const resolvedDerivedTerm = resolveDerivedTerm(derivedTerm, context)
-          '''),
-          ]
-
-          for old, new in replacements:
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f'expected exactly one replacement, found {count}: {old.splitlines()[0]!r}')
-              source = source.replace(old, new)
-
-          path.write_text(source)
-          PY
+          python .github/scripts/issue4-hoist-scoring.py
           git diff --check
           git diff -- src/scoring.ts
           pnpm typecheck
           pnpm test
-      - run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
-      - name: Issue 4 targeted JSC and V8 traces
+
+      - name: Engine benchmark
+        run: FMS_REQUIRE_RSS=1 node benchmarks/engines/run.mjs
+
+      - name: Targeted JSC traces
         shell: bash
         run: |
           trace_jsc() {
@@ -234,33 +49,13 @@ jobs:
             BUN_JSC_useConcurrentJIT=false \
             BUN_JSC_reportDFGCompileTimes=true \
             BUN_JSC_logCompilationChanges=true \
-            bun "$file" >"${label}.jsc.out" 2>"${label}.jsc.jit"
-            cat "${label}.jsc.out"
-            echo "--- targeted JSC hot paths (${label}) ---"
-            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|jettison|reopt|deopt|OSR' "${label}.jsc.jit" || true
-          }
-
-          trace_v8() {
-            label="$1"
-            file="$2"
-            echo "=== V8 ${label} ==="
-            node --trace-opt --trace-deopt "$file" >"${label}.v8.log" 2>&1
-            grep '@@FROZEN_ENGINE_BENCH@@' "${label}.v8.log" || true
-            echo "--- targeted V8 hot paths (${label}) ---"
-            grep -Ei 'aggregateSegmentPostingList|scorePostingDoc|executeQueryInternal|executeQuerySpecInternal|executeCombinedBranches|gateFromResult|runSearch|optimizing|completed optimizing|deopt' "${label}.v8.log" || true
+            bun "$file" >"${label}.out" 2>"${label}.jit"
+            cat "${label}.out"
+            echo "--- scorePostingDoc compile count ---"
+            grep -c 'Optimized scorePostingDoc' "${label}.jit" || true
+            echo "--- targeted hot paths ---"
+            grep -E 'compiling (scorePostingDoc|aggregateSegmentPostingList)|Optimized (scorePostingDoc|aggregateSegmentPostingList)' "${label}.jit" || true
           }
 
           trace_jsc resident-history benchmarks/tmp/engines/resident-pressure.js
           trace_jsc multi-only benchmarks/tmp/engines/issue4-multi-only.js
-          trace_v8 resident-history benchmarks/tmp/engines/resident-pressure.js
-          trace_v8 multi-only benchmarks/tmp/engines/issue4-multi-only.js
-
-          echo '=== V8 aggregateSegmentPostingList bytecode ==='
-          node --print-bytecode --print-bytecode-filter=aggregateSegmentPostingList \
-            benchmarks/tmp/engines/issue4-multi-only.js >aggregate.bytecode.log 2>&1
-          grep -E -B 7 -A 7 '@[[:space:]]+(19|306|356)[[:space:]]' aggregate.bytecode.log || true
-
-          echo '=== V8 scorePostingDoc bytecode ==='
-          node --print-bytecode --print-bytecode-filter=scorePostingDoc \
-            benchmarks/tmp/engines/issue4-multi-only.js >score.bytecode.log 2>&1
-          grep -E -B 7 -A 7 '@[[:space:]]+(19|42|61|162|313)[[:space:]]' score.bytecode.log || true
