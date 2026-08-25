@@ -22,15 +22,16 @@ jobs:
           tar -xzf /tmp/bun-webkit.tar.gz
           test -x bun-webkit/bin/jsc
 
-      - name: Compare caller/linkage variants
+      - name: Compare caller/linkage/environment variants
         shell: bash
         run: |
           set -euo pipefail
           JSC="$PWD/bun-webkit/bin/jsc"
           SCRIPT="$PWD/benchmarks/jsc/inadequate-coverage-repro.js"
           GLOBAL_CALL="$RUNNER_TEMP/inadequate-coverage-global-call.js"
-          BASELINE_CALLER="$RUNNER_TEMP/inadequate-coverage-baseline-caller.js"
           STRICT_SCRIPT="$RUNNER_TEMP/inadequate-coverage-strict-script.js"
+          NO_CAPTURE="$RUNNER_TEMP/inadequate-coverage-no-callee-capture.js"
+          NO_CAPTURE_STRICT="$RUNNER_TEMP/inadequate-coverage-no-callee-capture-strict.js"
 
           # Same module callee, but dispatch through a stable global property.
           awk '
@@ -38,16 +39,60 @@ jobs:
             $0 == "const results = new Map()" { print "globalThis.__scorePostingDoc = scorePostingDoc" }
           ' "$SCRIPT" | sed 's/^    scorePostingDoc(results,/    globalThis.__scorePostingDoc(results,/' > "$GLOBAL_CALL"
 
-          # Keep only drive() out of DFG while leaving scorePostingDoc fully tierable.
-          sed '/^drive(false, INSERTS)$/i if (typeof noDFG === '\''function'\'') noDFG(drive)' "$SCRIPT" > "$BASELINE_CALLER"
-
           printf "'use strict';\n" > "$STRICT_SCRIPT"
           cat "$SCRIPT" >> "$STRICT_SCRIPT"
+
+          # Preserve the two-phase uncovered result.score access while removing every
+          # module-environment read/write from scorePostingDoc itself. sink is consumed
+          # only by the caller; the callee returns a numeric value on both branches.
+          cat > "$NO_CAPTURE" <<'JS'
+          const INSERTS = 20000
+          const UPDATES = 200000
+          const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? () => performance.now()
+            : () => Date.now()
+          const emit = typeof print === 'function' ? print : (...args) => console.log(...args)
+
+          let sink = 0
+
+          function scorePostingDoc(results, docId, termFreq) {
+            const fieldLength = 1 + (docId & 7)
+            const rawScore = termFreq * 2.2 / (termFreq + 1.2 * (0.3 + 0.7 * fieldLength))
+            const weightedScore = 1.7 * rawScore
+            const result = results.get(docId)
+            if (result) {
+              result.score += weightedScore
+              return result.score
+            }
+            results.set(docId, { score: weightedScore })
+            return weightedScore
+          }
+          if (typeof noInline === 'function') noInline(scorePostingDoc)
+
+          const results = new Map()
+          function drive(updateMode, count) {
+            for (let i = 0; i < count; i++) {
+              const docId = updateMode ? i % INSERTS : i
+              sink ^= scorePostingDoc(results, docId, 1 + (i & 3)) | 0
+            }
+          }
+
+          drive(false, INSERTS)
+          const start = now()
+          drive(true, UPDATES)
+          const elapsedMs = now() - start
+          if (results.size !== INSERTS)
+            throw new Error(`unexpected result size: ${results.size}`)
+          emit(`REPRO elapsed_ms=${elapsedMs.toFixed(3)} inserts=${INSERTS} updates=${UPDATES} sink=${sink}`)
+          JS
+          printf "'use strict';\n" > "$NO_CAPTURE_STRICT"
+          cat "$NO_CAPTURE" >> "$NO_CAPTURE_STRICT"
 
           run_case() {
             label="$1"
             file="$2"
             mode="$3"
+            allowlist="${4:-}"
             args=(
               --useFTLJIT=false
               --useConcurrentJIT=false
@@ -58,6 +103,9 @@ jobs:
               --verboseOSR=true
               --verboseCallLink=true
             )
+            if [ -n "$allowlist" ]; then
+              args+=(--dfgAllowlist="$allowlist")
+            fi
             if [ "$mode" = module ]; then
               "$JSC" "${args[@]}" --module-file="$file" >"${label}.all" 2>&1
             else
@@ -68,15 +116,17 @@ jobs:
             score_dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.all" || true)
             drive_dfg=$(grep -c 'Optimized drive' "${label}.all" || true)
             repro=$(grep '^REPRO ' "${label}.all" | tail -1 || true)
-            echo "LINKAGE ${label} mode=${mode} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} score_dfg=${score_dfg} drive_dfg=${drive_dfg}"
+            echo "LINKAGE ${label} mode=${mode} allowlist=${allowlist:-all} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} score_dfg=${score_dfg} drive_dfg=${drive_dfg}"
             echo "--- ${label} call/reoptimization markers ---"
-            grep -E 'scorePostingDoc|drive|CallLink|call link|OSR entry|reoptim|Jettison|Speculation failure' "${label}.all" | head -260 || true
+            grep -E 'scorePostingDoc|drive|CallLink|call link|OSR entry|reoptim|Jettison|Speculation failure' "${label}.all" | head -280 || true
           }
 
           run_case module-lexical "$SCRIPT" module
           run_case module-global-property "$GLOBAL_CALL" module
-          run_case module-baseline-caller "$BASELINE_CALLER" module
+          run_case module-callee-only-dfg "$SCRIPT" module scorePostingDoc
           run_case strict-script "$STRICT_SCRIPT" script
+          run_case module-no-callee-capture "$NO_CAPTURE" module
+          run_case strict-script-no-callee-capture "$NO_CAPTURE_STRICT" script
 
       - name: Compare DFG caller graphs
         shell: bash
