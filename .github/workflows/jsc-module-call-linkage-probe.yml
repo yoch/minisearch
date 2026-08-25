@@ -1,0 +1,92 @@
+name: JSC module call-linkage probe
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/jsc/inadequate-coverage-repro.js'
+      - '.github/workflows/jsc-module-call-linkage-probe.yml'
+
+jobs:
+  linkage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download exact JSC build embedded by Bun 1.4.1-canary.1+11fb73032
+        shell: bash
+        run: |
+          set -euxo pipefail
+          url='https://github.com/oven-sh/WebKit/releases/download/autobuild-cb61607f1a4bae79d7701965062634dee9efb349/bun-webkit-linux-amd64.tar.gz'
+          curl -L --fail --retry 4 --retry-all-errors "$url" -o /tmp/bun-webkit.tar.gz
+          echo '637271c46b1a8a0736acb8748bbe9c16528d3399e064fcdffbb293630ca63de3  /tmp/bun-webkit.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/bun-webkit.tar.gz
+          test -x bun-webkit/bin/jsc
+
+      - name: Compare module lexical call with global-property call
+        shell: bash
+        run: |
+          set -euo pipefail
+          JSC="$PWD/bun-webkit/bin/jsc"
+          SCRIPT="$PWD/benchmarks/jsc/inadequate-coverage-repro.js"
+          GLOBAL_CALL="$RUNNER_TEMP/inadequate-coverage-global-call.js"
+
+          # Preserve the exact same module-defined scorePostingDoc function, but expose
+          # the function object through globalThis and make only drive() dispatch via
+          # a global-property lookup. This isolates callee call linkage from callee code.
+          awk '
+            { print }
+            $0 == "const results = new Map()" { print "globalThis.__scorePostingDoc = scorePostingDoc" }
+          ' "$SCRIPT" | sed 's/^    scorePostingDoc(results,/    globalThis.__scorePostingDoc(results,/' > "$GLOBAL_CALL"
+
+          run_case() {
+            label="$1"
+            file="$2"
+            args=(
+              --useFTLJIT=false
+              --useConcurrentJIT=false
+              --reportDFGCompileTimes=true
+              --logCompilationChanges=true
+              --printEachOSRExit=true
+              --verboseDFGOSRExit=true
+              --verboseOSR=true
+              --verboseCallLink=true
+            )
+            "$JSC" "${args[@]}" --module-file="$file" >"${label}.all" 2>&1
+            exits=$(grep -c 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" || true)
+            max=$(grep 'Speculation failure in scorePostingDoc.*InadequateCoverage' "${label}.all" | sed -n 's/.*osrExitCounter = \([0-9]*\).*/\1/p' | sort -n | tail -1 || true)
+            dfg=$(grep -c 'Optimized scorePostingDoc' "${label}.all" || true)
+            repro=$(grep '^REPRO ' "${label}.all" | tail -1 || true)
+            echo "LINKAGE ${label} ${repro#REPRO } inadequate_exits=${exits} max_counter=${max:-0} dfg_compiles=${dfg}"
+            echo "--- ${label} call/reoptimization markers ---"
+            grep -E 'scorePostingDoc|drive|CallLink|call link|OSR entry|reoptim|Jettison|Speculation failure' "${label}.all" | head -240 || true
+          }
+
+          run_case module-lexical "$SCRIPT"
+          run_case module-global-property "$GLOBAL_CALL"
+
+      - name: Dump DFG parsing graphs for the two callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          JSC="$PWD/bun-webkit/bin/jsc"
+          SCRIPT="$PWD/benchmarks/jsc/inadequate-coverage-repro.js"
+          GLOBAL_CALL="$RUNNER_TEMP/inadequate-coverage-global-call.js"
+          args=(
+            --useFTLJIT=false
+            --useConcurrentJIT=false
+            --dumpGraphAfterParsing=true
+            --logCompilationChanges=true
+          )
+          "$JSC" "${args[@]}" --module-file="$SCRIPT" >module-lexical-graph.all 2>&1
+          "$JSC" "${args[@]}" --module-file="$GLOBAL_CALL" >module-global-property-graph.all 2>&1
+          echo '--- lexical drive graph call nodes ---'
+          grep -E 'drive#|Call|DirectCall|GetById|GetFromScope|GetGlobal' module-lexical-graph.all | head -200 || true
+          echo '--- global-property drive graph call nodes ---'
+          grep -E 'drive#|Call|DirectCall|GetById|GetFromScope|GetGlobal' module-global-property-graph.all | head -200 || true
+
+      - name: Upload linkage logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-jsc-module-linkage-cb61607
+          path: '*.all'
