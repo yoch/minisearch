@@ -2,6 +2,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import typescript from '@rollup/plugin-typescript'
+import ts from 'typescript'
 import { rollup } from 'rollup'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -24,6 +25,22 @@ const forbiddenRuntimeTokens = [
   ['Response', /\bResponse\b/],
 ]
 
+const engineEntryTypescript = {
+  name: 'engine-entry-typescript',
+  transform (code, id) {
+    if (id !== input) return null
+    const result = ts.transpileModule(code, {
+      fileName: id,
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.ESNext,
+        sourceMap: false,
+      },
+    })
+    return { code: result.outputText, map: null }
+  },
+}
+
 export async function buildEngineBundle () {
   await mkdir(dirname(outputFile), { recursive: true })
   const bundle = await rollup({
@@ -34,13 +51,13 @@ export async function buildEngineBundle () {
       warn(warning)
     },
     plugins: [
+      engineEntryTypescript,
       typescript({
         tsconfig: resolve(root, 'tsconfig.json'),
         filterRoot: root,
         include: [
           'src/**/*.ts',
           'src/**/*.js',
-          'benchmarks/engines/**/*.ts',
         ],
         compilerOptions: {
           sourceMap: false,
