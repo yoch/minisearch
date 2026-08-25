@@ -39,15 +39,45 @@ function versionFor (command) {
 }
 
 function parseReport (stdout) {
-  const line = stdout
+  const lines = stdout
     .split(/\r?\n/)
-    .find(candidate => candidate.startsWith(REPORT_PREFIX))
-  if (line == null) throw new Error('benchmark report marker not found')
-  const report = JSON.parse(line.slice(REPORT_PREFIX.length))
-  if (report.schema !== 1 || report.timings == null || report.fingerprints == null) {
-    throw new Error('benchmark report schema mismatch')
+    .filter(candidate => candidate.startsWith(REPORT_PREFIX))
+  if (lines.length === 0) throw new Error('benchmark report marker not found')
+
+  const reports = lines.map(line => JSON.parse(line.slice(REPORT_PREFIX.length)))
+  const timings = {}
+  const fingerprints = {}
+  const profiles = []
+  let documents = 0
+  let terms = 0
+
+  for (const report of reports) {
+    if (report.schema !== 1 || report.timings == null || report.fingerprints == null) {
+      throw new Error('benchmark report schema mismatch')
+    }
+    const profile = report.profile || 'core'
+    const workloads = Object.keys(report.timings)
+    profiles.push({ name: profile, corpus: report.corpus, workloads })
+    documents += report.corpus.documents
+    terms += report.corpus.terms
+
+    for (const [name, timing] of Object.entries(report.timings)) {
+      if (timings[name] != null) throw new Error(`duplicate timing name across profiles: ${name}`)
+      timings[name] = timing
+    }
+    for (const [name, fingerprint] of Object.entries(report.fingerprints)) {
+      if (fingerprints[name] != null) throw new Error(`duplicate fingerprint name across profiles: ${name}`)
+      fingerprints[name] = fingerprint
+    }
   }
-  return report
+
+  return {
+    schema: 1,
+    corpus: { documents, terms },
+    profiles,
+    fingerprints,
+    timings,
+  }
 }
 
 function runEngine (name, command) {
@@ -91,12 +121,12 @@ function formatUs (value) {
   return `${value.toFixed(2)} us`
 }
 
-function printTable (runs) {
+function printProfileTable (runs, profile) {
   const reference = runs.find(run => run.name === 'node') || runs[0]
-  const workloads = Object.keys(reference.report.timings)
-  console.log(`\nCorpus: ${reference.report.corpus.documents} docs, ${reference.report.corpus.terms} terms`)
-  console.log(`Reference: ${reference.name} (${reference.version})`)
-  console.log('')
+  const refProfile = reference.report.profiles.find(item => item.name === profile.name)
+  const workloads = refProfile.workloads
+  console.log(`\nProfile: ${profile.name} — ${profile.corpus.documents} docs, ${profile.corpus.terms} terms`)
+  console.log(`Reference: ${reference.name} (${reference.version})\n`)
   const width = 18
   console.log(['engine', ...workloads].map(value => value.padEnd(width)).join(''))
   console.log('-'.repeat(width * (workloads.length + 1)))
@@ -110,6 +140,11 @@ function printTable (runs) {
     }
     console.log(cells.join(''))
   }
+}
+
+function printTables (runs) {
+  const reference = runs.find(run => run.name === 'node') || runs[0]
+  for (const profile of reference.report.profiles) printProfileTable(runs, profile)
 }
 
 async function main () {
@@ -146,7 +181,7 @@ async function main () {
 
   if (runs.length === 0) throw new Error('no JavaScript engine completed the benchmark')
   const mismatches = validateFingerprints(runs)
-  printTable(runs)
+  printTables(runs)
 
   console.log('\nJSON:')
   console.log(JSON.stringify({ schema: 1, runs, failures, mismatches }, null, 2))
