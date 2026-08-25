@@ -1,14 +1,13 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import typescript from '@rollup/plugin-typescript'
+import resolvePlugin from '@rollup/plugin-node-resolve'
 import ts from 'typescript'
 import { rollup } from 'rollup'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '../..')
 const input = resolve(here, 'engineBenchEntry.ts')
-const typescriptOutDir = resolve(root, 'benchmarks/tmp/engines/ts')
 export const outputFile = resolve(root, 'benchmarks/tmp/engines/frozen-engine-bench.js')
 
 const forbiddenRuntimeTokens = [
@@ -26,16 +25,17 @@ const forbiddenRuntimeTokens = [
   ['Response', /\bResponse\b/],
 ]
 
-const engineEntryTypescript = {
-  name: 'engine-entry-typescript',
+const engineTypescript = {
+  name: 'engine-typescript',
   transform (code, id) {
-    if (id !== input) return null
+    if (!id.endsWith('.ts')) return null
     const result = ts.transpileModule(code, {
       fileName: id,
       compilerOptions: {
         target: ts.ScriptTarget.ES2022,
         module: ts.ModuleKind.ESNext,
         sourceMap: false,
+        importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
       },
     })
     return { code: result.outputText, map: null }
@@ -52,21 +52,10 @@ export async function buildEngineBundle () {
       warn(warning)
     },
     plugins: [
-      engineEntryTypescript,
-      typescript({
-        tsconfig: resolve(root, 'tsconfig.json'),
-        filterRoot: root,
-        include: [
-          'src/**/*.ts',
-          'src/**/*.js',
-        ],
-        compilerOptions: {
-          outDir: typescriptOutDir,
-          sourceMap: false,
-          declaration: false,
-          declarationMap: false,
-        },
+      resolvePlugin({
+        extensions: ['.mjs', '.js', '.json', '.node', '.ts'],
       }),
+      engineTypescript,
     ],
   })
 
